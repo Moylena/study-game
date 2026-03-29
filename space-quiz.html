@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Space Quiz</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #111;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+    }
+    canvas { border: 2px solid #555; display: block; }
+  </style>
+</head>
+<body>
+  <canvas id="canvas" width="800" height="600"></canvas>
+  <script>
+    const canvas = document.getElementById('canvas');
+    const ctx    = canvas.getContext('2d');
+
+    // ── Constants ──────────────────────────────────────────────────
+    const W  = 800;
+    const H  = 600;
+    const ASTEROID_RADIUS = 52;
+    const ASTEROID_SPEED  = 70;   // px/s  — roughly 8.6 s to cross the screen
+    const BULLET_SPEED    = 480;  // px/s
+    const GUN_SPEED       = 300;  // px/s
+    const GUN_W  = 40;
+    const GUN_H  = 50;
+    const BUL_W  = 4;
+    const BUL_H  = 14;
+    const END_MS = 5000;          // ms before auto-return to start screen
+
+    // ── Questions ──────────────────────────────────────────────────
+    const QUESTIONS = [
+      { q: 'What is the major city of England?',           correct: 'London',   wrong: ['Paris',  'New York',    'Berlin']      },
+      { q: 'What is the major city of the United States?', correct: 'New York', wrong: ['London', 'Paris',       'Los Angeles'] },
+      { q: 'What is the major city of France?',            correct: 'Paris',    wrong: ['London', 'New York',    'Lyon']        },
+    ];
+
+    // ── Pure / testable functions ──────────────────────────────────
+
+    /** Fisher-Yates shuffle — returns a new array, does not mutate input */
+    function shuffleArray(arr) {
+      const a = arr.slice();
+      for (let i = a.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [a[i], a[j]] = [a[j], a[i]];
+      }
+      return a;
+    }
+
+    /**
+     * Build four asteroids for a question.
+     * Each asteroid is placed in one of four non-overlapping horizontal zones
+     * at a random x position within that zone. Zones are shuffled so
+     * the correct answer's position is unpredictable.
+     */
+    function buildAsteroids(qObj) {
+      const answers = shuffleArray([qObj.correct, ...qObj.wrong]);
+      const zones   = shuffleArray([0, 1, 2, 3]);
+      return answers.map((answer, i) => {
+        const z    = zones[i];
+        const pad  = ASTEROID_RADIUS + 10;          // keep circle fully on-screen
+        const minX = z * (W / 4) + pad;
+        const maxX = (z + 1) * (W / 4) - pad;
+        return {
+          x:         minX + Math.random() * (maxX - minX),
+          y:         -ASTEROID_RADIUS,               // start above the canvas
+          answer,
+          isCorrect: answer === qObj.correct,
+          radius:    ASTEROID_RADIUS,
+        };
+      });
+    }
+
+    /** True if the bullet's centre point is inside the asteroid's circle */
+    function bulletHitsAsteroid(b, a) {
+      const cx = b.x + BUL_W / 2;
+      const cy = b.y + BUL_H / 2;
+      const dx = cx - a.x;
+      const dy = cy - a.y;
+      return (dx * dx + dy * dy) < (a.radius * a.radius);
+    }
+
+    /** True when the asteroid's bottom edge has reached the canvas floor */
+    function asteroidReachedBottom(a) {
+      return a.y + a.radius >= H;
+    }
+
+    // ── Mutable state ──────────────────────────────────────────────
+    let state     = 'START';   // 'START' | 'PLAYING' | 'END'
+    let score     = 0;
+    let qIndex    = 0;
+    let asteroids = [];
+    let bullets   = [];
+    let gunX      = W / 2;
+    let keys      = {};
+    let endTitle  = '';
+    let endScore  = '';
+    let endTimer  = null;
+    let rafId     = null;
+    let lastTs    = null;
+    let startBtn  = null;      // bounding rect of the Start button (set during render)
+
+    // ── Game flow ──────────────────────────────────────────────────
+
+    function startGame() {
+      score     = 0;
+      qIndex    = 0;
+      bullets   = [];
+      gunX      = W / 2;
+      keys      = {};
+      lastTs    = null;
+      state     = 'PLAYING';
+      loadQuestion();
+      if (rafId) cancelAnimationFrame(rafId);
+      rafId = requestAnimationFrame(loop);
+    }
+
+    function loadQuestion() {
+      asteroids = buildAsteroids(QUESTIONS[qIndex]);
+      bullets   = [];
+    }
+
+    function triggerEnd(title) {
+      state    = 'END';
+      endTitle = title;
+      endScore = `You scored ${score} out of ${QUESTIONS.length}`;
+      if (endTimer) clearTimeout(endTimer);
+      endTimer = setTimeout(() => { state = 'START'; render(); }, END_MS);
+    }
+
+    /** Spawn one bullet from the gun's apex */
+    function fireBullet() {
+      // gun apex y = H - GUN_H  (centre is H - GUN_H/2, apex is GUN_H/2 above that)
+      bullets.push({ x: gunX - BUL_W / 2, y: H - GUN_H - BUL_H });
+    }
+
+    // ── Update ─────────────────────────────────────────────────────
+
+    function update(dt) {
+      // Move gun left / right, clamped to canvas edges
+      if (keys.ArrowLeft)  gunX = Math.max(GUN_W / 2,     gunX - GUN_SPEED * dt);
+      if (keys.ArrowRight) gunX = Math.min(W - GUN_W / 2, gunX + GUN_SPEED * dt);
+
+      // Advance bullets upward; cull any that have left the canvas
+      for (const b of bullets) b.y -= BULLET_SPEED * dt;
+      bullets = bullets.filter(b => b.y + BUL_H > 0);
+
+      // Drop asteroids
+      for (const a of asteroids) a.y += ASTEROID_SPEED * dt;
+
+      // Collision: find the first bullet that strikes any asteroid
+      let hitBulletIdx = -1;
+      let hitAsteroid  = null;
+      outer:
+      for (let i = 0; i < bullets.length; i++) {
+        for (const a of asteroids) {
+          if (bulletHitsAsteroid(bullets[i], a)) {
+            hitBulletIdx = i;
+            hitAsteroid  = a;
+            break outer;
+          }
+        }
+      }
+
+      if (hitAsteroid !== null) {
+        bullets.splice(hitBulletIdx, 1);   // remove only the bullet that struck
+        if (hitAsteroid.isCorrect) {
+          score++;
+          qIndex++;
+          if (qIndex >= QUESTIONS.length) triggerEnd('You finished!');
+          else loadQuestion();
+        } else {
+          triggerEnd('Wrong answer! Game over.');
+        }
+        return;
+      }
+
+      // Check whether any asteroid has reached the floor
+      for (const a of asteroids) {
+        if (asteroidReachedBottom(a)) {
+          triggerEnd("Time's up! Game over.");
+          return;
+        }
+      }
+    }
+
+    // ── Render ─────────────────────────────────────────────────────
+
+    function render() {
+      ctx.fillStyle = '#000';
+      ctx.fillRect(0, 0, W, H);
+      if      (state === 'START')   renderStart();
+      else if (state === 'PLAYING') renderGame();
+      else if (state === 'END')     renderEnd();
+    }
+
+    function renderStart() {
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#fff';
+
+      ctx.font = 'bold 52px monospace';
+      ctx.fillText('SPACE QUIZ', W / 2, 185);
+
+      ctx.font = '18px monospace';
+      ctx.fillText('Shoot the asteroid with the correct answer', W / 2, 255);
+      ctx.fillText('Arrow keys to move   \u00b7   Space to fire', W / 2, 285);
+
+      // Draw Start button
+      const bx = W / 2 - 90, by = 345, bw = 180, bh = 56;
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth   = 2;
+      ctx.strokeRect(bx, by, bw, bh);
+      ctx.font      = 'bold 26px monospace';
+      ctx.fillStyle = '#fff';
+      ctx.fillText('START', W / 2, by + 38);
+      startBtn = { x: bx, y: by, w: bw, h: bh };
+    }
+
+    function renderGame() {
+      const q = QUESTIONS[qIndex];
+
+      // Score — top-left
+      ctx.fillStyle = '#fff';
+      ctx.font      = '16px monospace';
+      ctx.textAlign = 'left';
+      ctx.fillText(`Score: ${score}`, 12, 22);
+
+      // Question — top-centre
+      ctx.font      = 'bold 20px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText(q.q, W / 2, 52);
+
+      // Thin separator below the question header
+      ctx.strokeStyle = '#333';
+      ctx.lineWidth   = 1;
+      ctx.beginPath();
+      ctx.moveTo(0, 66);
+      ctx.lineTo(W, 66);
+      ctx.stroke();
+
+      // Asteroids
+      for (const a of asteroids) {
+        ctx.beginPath();
+        ctx.arc(a.x, a.y, a.radius, 0, Math.PI * 2);
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth   = 2;
+        ctx.stroke();
+        ctx.fillStyle   = '#fff';
+        ctx.font        = '13px monospace';
+        ctx.textAlign   = 'center';
+        ctx.fillText(a.answer, a.x, a.y + 5);
+      }
+
+      // Bullets
+      ctx.fillStyle = '#fff';
+      for (const b of bullets) ctx.fillRect(b.x, b.y, BUL_W, BUL_H);
+
+      // Gun — upward-pointing white triangle
+      const gcy = H - GUN_H / 2;
+      ctx.beginPath();
+      ctx.moveTo(gunX,             gcy - GUN_H / 2);  // apex
+      ctx.lineTo(gunX - GUN_W / 2, gcy + GUN_H / 2);  // bottom-left
+      ctx.lineTo(gunX + GUN_W / 2, gcy + GUN_H / 2);  // bottom-right
+      ctx.closePath();
+      ctx.fillStyle = '#fff';
+      ctx.fill();
+    }
+
+    function renderEnd() {
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#fff';
+      ctx.font      = 'bold 38px monospace';
+      ctx.fillText(endTitle, W / 2, 240);
+      ctx.font      = '24px monospace';
+      ctx.fillText(endScore,  W / 2, 300);
+      ctx.font      = '16px monospace';
+      ctx.fillStyle = '#888';
+      ctx.fillText('Returning to start in 5 seconds\u2026', W / 2, 360);
+    }
+
+    // ── Game loop ──────────────────────────────────────────────────
+
+    function loop(ts) {
+      if (state !== 'PLAYING') return;
+      if (!lastTs) lastTs = ts;
+      const dt = Math.min((ts - lastTs) / 1000, 0.05);  // cap dt to avoid big jumps on tab switch
+      lastTs = ts;
+      update(dt);
+      render();
+      if (state === 'PLAYING') rafId = requestAnimationFrame(loop);
+    }
+
+    // ── Input ──────────────────────────────────────────────────────
+
+    document.addEventListener('keydown', e => {
+      if (!['ArrowLeft', 'ArrowRight', 'Space'].includes(e.code)) return;
+      e.preventDefault();                        // prevent page scrolling
+      if (state !== 'PLAYING') return;
+      if (e.code === 'ArrowLeft')  keys.ArrowLeft  = true;
+      if (e.code === 'ArrowRight') keys.ArrowRight = true;
+      if (e.code === 'Space' && !keys._spaceHeld) {
+        keys._spaceHeld = true;
+        fireBullet();
+      }
+    });
+
+    document.addEventListener('keyup', e => {
+      if (e.code === 'ArrowLeft')  keys.ArrowLeft  = false;
+      if (e.code === 'ArrowRight') keys.ArrowRight = false;
+      if (e.code === 'Space')      keys._spaceHeld = false;
+    });
+
+    canvas.addEventListener('click', e => {
+      if (state !== 'START' || !startBtn) return;
+      const r  = canvas.getBoundingClientRect();
+      const mx = (e.clientX - r.left) * (W / r.width);
+      const my = (e.clientY - r.top)  * (H / r.height);
+      const b  = startBtn;
+      if (mx >= b.x && mx <= b.x + b.w && my >= b.y && my <= b.y + b.h) startGame();
+    });
+
+    // ── Boot ───────────────────────────────────────────────────────
+    render();
+  </script>
+</body>
+</html>

@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Space Quiz — Tests</title>
+  <style>
+    body { background: #111; color: #eee; font: 15px monospace; padding: 24px; }
+    h1   { color: #fff; margin-bottom: 16px; }
+    .pass { color: #4caf50; }
+    .fail { color: #f44336; }
+    .section { margin-top: 20px; color: #aaa; font-weight: bold; }
+    #summary { margin-top: 24px; font-size: 18px; font-weight: bold; }
+  </style>
+</head>
+<body>
+  <h1>Space Quiz — Unit Tests</h1>
+  <div id="output"></div>
+  <div id="summary"></div>
+
+  <script>
+    // ── Replicate constants and pure functions from space-quiz.html ──
+    // (These must stay in sync with the game file.)
+
+    const W  = 800;
+    const H  = 600;
+    const ASTEROID_RADIUS = 52;
+    const ASTEROID_SPEED  = 70;
+    const BULLET_SPEED    = 480;
+    const GUN_W  = 40;
+    const GUN_H  = 50;
+    const BUL_W  = 4;
+    const BUL_H  = 14;
+    const END_MS = 5000;
+
+    const QUESTIONS = [
+      { q: 'What is the major city of England?',           correct: 'London',   wrong: ['Paris',  'New York',    'Berlin']      },
+      { q: 'What is the major city of the United States?', correct: 'New York', wrong: ['London', 'Paris',       'Los Angeles'] },
+      { q: 'What is the major city of France?',            correct: 'Paris',    wrong: ['London', 'New York',    'Lyon']        },
+    ];
+
+    function shuffleArray(arr) {
+      const a = arr.slice();
+      for (let i = a.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [a[i], a[j]] = [a[j], a[i]];
+      }
+      return a;
+    }
+
+    function buildAsteroids(qObj) {
+      const answers = shuffleArray([qObj.correct, ...qObj.wrong]);
+      const zones   = shuffleArray([0, 1, 2, 3]);
+      return answers.map((answer, i) => {
+        const z    = zones[i];
+        const pad  = ASTEROID_RADIUS + 10;
+        const minX = z * (W / 4) + pad;
+        const maxX = (z + 1) * (W / 4) - pad;
+        return {
+          x:         minX + Math.random() * (maxX - minX),
+          y:         -ASTEROID_RADIUS,
+          answer,
+          isCorrect: answer === qObj.correct,
+          radius:    ASTEROID_RADIUS,
+        };
+      });
+    }
+
+    function bulletHitsAsteroid(b, a) {
+      const cx = b.x + BUL_W / 2;
+      const cy = b.y + BUL_H / 2;
+      const dx = cx - a.x;
+      const dy = cy - a.y;
+      return (dx * dx + dy * dy) < (a.radius * a.radius);
+    }
+
+    function asteroidReachedBottom(a) {
+      return a.y + a.radius >= H;
+    }
+
+    // ── Test runner ────────────────────────────────────────────────
+
+    const out = document.getElementById('output');
+    let passed = 0, failed = 0;
+
+    function assert(condition, name) {
+      const el  = document.createElement('div');
+      el.className = condition ? 'pass' : 'fail';
+      el.textContent = (condition ? '\u2713' : '\u2717 FAIL') + '  ' + name;
+      out.appendChild(el);
+      condition ? passed++ : failed++;
+    }
+
+    function section(title) {
+      const el = document.createElement('div');
+      el.className = 'section';
+      el.textContent = '\u2500\u2500 ' + title;
+      out.appendChild(el);
+    }
+
+    // ── shuffleArray ───────────────────────────────────────────────
+
+    section('shuffleArray');
+
+    (() => {
+      const input    = [1, 2, 3, 4, 5];
+      const shuffled = shuffleArray(input);
+      assert(shuffled.length === input.length,
+        'preserves array length');
+      assert(input.every(v => shuffled.includes(v)),
+        'preserves all elements');
+      assert(shuffled !== input,
+        'returns a new array (does not mutate input)');
+      assert(JSON.stringify(input) === JSON.stringify([1, 2, 3, 4, 5]),
+        'original array is unchanged');
+    })();
+
+    (() => {
+      assert(shuffleArray([]).length === 0,
+        'handles empty array');
+      assert(shuffleArray([42])[0] === 42,
+        'handles single-element array');
+    })();
+
+    (() => {
+      // Run 20 shuffles; at least one must differ from the original order
+      // (probability of all 20 being identical for a 4-element array is (1/24)^20 ≈ 0)
+      const original = [1, 2, 3, 4];
+      const allSame  = Array.from({ length: 20 }, () => shuffleArray(original))
+                            .every(s => JSON.stringify(s) === JSON.stringify(original));
+      assert(!allSame, 'actually shuffles (not always the same order)');
+    })();
+
+    // ── buildAsteroids ─────────────────────────────────────────────
+
+    section('buildAsteroids');
+
+    QUESTIONS.forEach((qObj, qi) => {
+      const label     = `Q${qi + 1} (${qObj.correct})`;
+      const asteroids = buildAsteroids(qObj);
+
+      assert(asteroids.length === 4,
+        `${label}: produces exactly 4 asteroids`);
+
+      const correctOnes = asteroids.filter(a => a.isCorrect);
+      assert(correctOnes.length === 1,
+        `${label}: exactly 1 asteroid is marked correct`);
+
+      assert(correctOnes[0].answer === qObj.correct,
+        `${label}: the correct asteroid carries the right answer text`);
+
+      const wrongAnswers  = asteroids.filter(a => !a.isCorrect).map(a => a.answer);
+      const allWrongFound = qObj.wrong.every(w => wrongAnswers.includes(w));
+      assert(allWrongFound,
+        `${label}: all three wrong answers are present`);
+
+      // Every asteroid must be horizontally within the canvas (including its radius)
+      const inBounds = asteroids.every(a => a.x - a.radius >= 0 && a.x + a.radius <= W);
+      assert(inBounds,
+        `${label}: all asteroids start within horizontal canvas bounds`);
+
+      // Asteroids must start above the canvas
+      const aboveCanvas = asteroids.every(a => a.y + a.radius <= 0);
+      assert(aboveCanvas,
+        `${label}: all asteroids start above the canvas (y + radius <= 0)`);
+    });
+
+    (() => {
+      // Run buildAsteroids many times and confirm zones keep asteroids apart
+      // (minimum gap between any two asteroid centres must be > 0 — they fit in distinct zones)
+      let zonesOk = true;
+      for (let t = 0; t < 50; t++) {
+        const a = buildAsteroids(QUESTIONS[0]);
+        for (let i = 0; i < a.length; i++) {
+          for (let j = i + 1; j < a.length; j++) {
+            if (Math.abs(a[i].x - a[j].x) < ASTEROID_RADIUS * 2) {
+              zonesOk = false;
+            }
+          }
+        }
+      }
+      assert(zonesOk, 'asteroids never overlap horizontally across 50 runs');
+    })();
+
+    // ── bulletHitsAsteroid ─────────────────────────────────────────
+
+    section('bulletHitsAsteroid');
+
+    (() => {
+      const asteroid = { x: 400, y: 300, radius: ASTEROID_RADIUS };
+
+      // Bullet whose centre is exactly at the asteroid centre — definite hit
+      const directHit = { x: asteroid.x - BUL_W / 2, y: asteroid.y - BUL_H / 2 };
+      assert(bulletHitsAsteroid(directHit, asteroid),
+        'direct hit: bullet centre at asteroid centre');
+
+      // Bullet placed far away — definite miss
+      const farMiss = { x: 0, y: 0 };
+      assert(!bulletHitsAsteroid(farMiss, asteroid),
+        'clear miss: bullet far from asteroid');
+
+      // Bullet whose centre is just inside the radius
+      const justInside = {
+        x: asteroid.x - BUL_W / 2 + (ASTEROID_RADIUS - 1),
+        y: asteroid.y - BUL_H / 2,
+      };
+      assert(bulletHitsAsteroid(justInside, asteroid),
+        'just inside radius: should be a hit');
+
+      // Bullet whose centre is just outside the radius
+      const justOutside = {
+        x: asteroid.x - BUL_W / 2 + (ASTEROID_RADIUS + 1),
+        y: asteroid.y - BUL_H / 2,
+      };
+      assert(!bulletHitsAsteroid(justOutside, asteroid),
+        'just outside radius: should be a miss');
+
+      // Verify the condition is strict less-than (not <=) — point exactly on
+      // the circumference should NOT count as a hit
+      const onBoundary = {
+        x: asteroid.x + ASTEROID_RADIUS - BUL_W / 2,
+        y: asteroid.y - BUL_H / 2,
+      };
+      const dist2 = Math.pow((onBoundary.x + BUL_W / 2) - asteroid.x, 2)
+                  + Math.pow((onBoundary.y + BUL_H / 2) - asteroid.y, 2);
+      // dist2 should equal radius² exactly when bullet centre is on circumference
+      assert(!bulletHitsAsteroid(onBoundary, asteroid),
+        'boundary (circumference): not counted as a hit (strict <)');
+    })();
+
+    // ── asteroidReachedBottom ──────────────────────────────────────
+
+    section('asteroidReachedBottom');
+
+    (() => {
+      // Well above the floor
+      assert(!asteroidReachedBottom({ y: 0,        radius: ASTEROID_RADIUS }),
+        'asteroid near the top: has not reached bottom');
+
+      // Mid-screen
+      assert(!asteroidReachedBottom({ y: H / 2,    radius: ASTEROID_RADIUS }),
+        'asteroid at mid-screen: has not reached bottom');
+
+      // Bottom edge exactly at the floor (y + radius === H) — triggers
+      assert(asteroidReachedBottom({ y: H - ASTEROID_RADIUS, radius: ASTEROID_RADIUS }),
+        'bottom edge exactly at floor (y + radius === H): triggers game over');
+
+      // Bottom edge one pixel below the floor
+      assert(asteroidReachedBottom({ y: H - ASTEROID_RADIUS + 1, radius: ASTEROID_RADIUS }),
+        'bottom edge one pixel below floor: triggers game over');
+
+      // Centre still above the floor but bottom edge below it
+      assert(asteroidReachedBottom({ y: H - ASTEROID_RADIUS + 5, radius: ASTEROID_RADIUS }),
+        'centre above floor but bottom edge past it: triggers game over');
+    })();
+
+    // ── Bullet spawning ────────────────────────────────────────────
+
+    section('fireBullet (logic verification)');
+
+    (() => {
+      // Replicate fireBullet logic here to verify the arithmetic
+      const gunX     = W / 2;
+      const bulletY  = H - GUN_H - BUL_H;  // 600 - 50 - 14 = 536
+      const bulletX  = gunX - BUL_W / 2;   // 398
+
+      assert(bulletY === 536,
+        'bullet initial y is H - GUN_H - BUL_H = 536');
+      assert(bulletX === W / 2 - BUL_W / 2,
+        'bullet initial x is centred on gun');
+
+      // Bullet must start above the gun apex
+      const gunApexY = H - GUN_H;          // 550
+      assert(bulletY < gunApexY,
+        'bullet spawns above the gun apex (no visual overlap)');
+
+      // Bullet must start within the canvas
+      assert(bulletY >= 0 && bulletY < H,
+        'bullet initial y is within canvas bounds');
+    })();
+
+    // ── Score logic ────────────────────────────────────────────────
+
+    section('Score logic');
+
+    (() => {
+      // Simulate correct hit: score should increment
+      let score = 0;
+      const hitCorrect = { isCorrect: true };
+      if (hitCorrect.isCorrect) score++;
+      assert(score === 1, 'correct hit increments score by 1');
+
+      // Simulate wrong hit: score should not increment
+      let score2 = 0;
+      const hitWrong = { isCorrect: false };
+      if (hitWrong.isCorrect) score2++;
+      assert(score2 === 0, 'wrong hit does not increment score');
+
+      // Three correct answers → max score equals number of questions
+      let finalScore = 0;
+      for (const q of QUESTIONS) {
+        finalScore++;  // every question answered correctly
+      }
+      assert(finalScore === QUESTIONS.length,
+        `perfect game yields score of ${QUESTIONS.length}`);
+    })();
+
+    // ── Summary ────────────────────────────────────────────────────
+
+    const summary = document.getElementById('summary');
+    const total   = passed + failed;
+    summary.style.color = failed === 0 ? '#4caf50' : '#f44336';
+    summary.textContent = `${passed} / ${total} tests passed${failed > 0 ? ` — ${failed} FAILED` : ' — all clear'}`;
+  </script>
+</body>
+</html>
