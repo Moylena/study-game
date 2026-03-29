@@ -1,0 +1,1034 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Question Builder</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #0a0a1a;
+      color: #e0e0f0;
+      min-height: 100vh;
+    }
+
+    /* ── Top bar ── */
+    .topbar {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      height: 50px;
+      background: #111128;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 20px;
+      border-bottom: 1px solid #2a2a4a;
+      z-index: 100;
+    }
+    .topbar-title { font-size: 13px; font-weight: 700; color: #7070c0; letter-spacing: 2px; }
+    .topbar-actions { display: flex; gap: 8px; }
+
+    /* ── Screens ── */
+    .screen { display: none; }
+    .screen.active { display: block; }
+    .content {
+      margin-top: 50px;
+      max-width: 760px;
+      margin-left: auto;
+      margin-right: auto;
+      padding: 40px 20px;
+    }
+
+    /* ── Buttons ── */
+    .btn {
+      padding: 9px 18px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 500;
+      transition: opacity 0.15s;
+    }
+    .btn:hover { opacity: 0.82; }
+    .btn:disabled { opacity: 0.35; cursor: not-allowed; }
+    .btn-primary  { background: #4a4aff; color: #fff; }
+    .btn-secondary{ background: #22224a; color: #c0c0e0; }
+    .btn-danger   { background: #7a1e1e; color: #fff; }
+    .btn-success  { background: #1a5c1a; color: #fff; }
+    .btn-ghost    { background: transparent; color: #8080b0; border: 1px solid #2a2a4a; }
+    .btn-sm       { padding: 5px 11px; font-size: 12px; }
+
+    /* ── Start screen ── */
+    .start-hero { text-align: center; padding: 70px 0 40px; }
+    .start-hero h1 { font-size: 30px; color: #9090ff; margin-bottom: 10px; }
+    .start-hero p  { color: #7070a0; font-size: 15px; margin-bottom: 36px; }
+    .start-actions { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+
+    /* ── Drop zone ── */
+    .drop-zone {
+      border: 2px dashed #33336a;
+      border-radius: 12px;
+      padding: 56px 40px;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+      background: #0d0d24;
+    }
+    .drop-zone.drag-over { border-color: #6666ff; background: #131333; }
+    .drop-zone h2  { font-size: 17px; color: #8080c0; margin-bottom: 8px; }
+    .drop-zone p   { color: #5a5a8a; font-size: 13px; }
+    #file-input    { display: none; }
+
+    /* ── File list ── */
+    .file-list { margin-top: 14px; }
+    .file-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 14px;
+      background: #111128;
+      border-radius: 7px;
+      margin-bottom: 8px;
+      font-size: 13px;
+    }
+    .file-name { color: #c0c0e0; }
+    .file-kind { color: #55558a; font-size: 11px; margin-left: 10px; }
+    .file-remove {
+      background: none; border: none;
+      color: #7a3030; cursor: pointer;
+      font-size: 16px; padding: 0 4px;
+      line-height: 1;
+    }
+    .file-remove:hover { color: #cc4444; }
+
+    /* ── Section layout helpers ── */
+    .section-title { font-size: 20px; color: #9090ff; margin-bottom: 20px; }
+    .row-between {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+    }
+    .row-end { display: flex; gap: 10px; justify-content: flex-end; margin-top: 24px; }
+    .row-gap  { display: flex; gap: 8px; }
+    .text-muted { color: #55558a; font-size: 13px; }
+
+    /* ── Alerts ── */
+    .alert {
+      padding: 11px 15px;
+      border-radius: 7px;
+      margin-bottom: 16px;
+      font-size: 13px;
+    }
+    .alert-error   { background: #2a0d0d; border: 1px solid #7a1e1e; color: #ff8080; }
+    .alert-success { background: #0d2a0d; border: 1px solid #1a5c1a; color: #80c080; }
+    .alert-info    { background: #0d162a; border: 1px solid #1a3a5a; color: #80a8d0; }
+
+    /* ── Loading ── */
+    .loading {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 18px;
+      padding: 80px 0;
+    }
+    .spinner {
+      width: 42px; height: 42px;
+      border: 3px solid #22224a;
+      border-top-color: #5555ff;
+      border-radius: 50%;
+      animation: spin 0.75s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Question cards ── */
+    .question-card {
+      background: #111128;
+      border-radius: 10px;
+      padding: 16px;
+      margin-bottom: 12px;
+      border: 2px solid #1e1e3a;
+      transition: border-color 0.15s, opacity 0.15s;
+    }
+    .question-card.approved { border-color: #1a5c1a; }
+    .question-card.rejected { border-color: #5a1a1a; opacity: 0.45; }
+    .question-card h3 { font-size: 14px; color: #d0d0f0; margin-bottom: 12px; line-height: 1.4; }
+    .answer-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 7px;
+      margin-bottom: 12px;
+    }
+    .answer-item { padding: 6px 10px; border-radius: 5px; font-size: 12px; }
+    .answer-correct { background: #0b250b; color: #68b868; border: 1px solid #1e4a1e; }
+    .answer-wrong   { background: #161616; color: #808090; border: 1px solid #222233; }
+    .card-actions   { display: flex; gap: 7px; justify-content: flex-end; }
+
+    /* ── Deploy summary ── */
+    .deploy-summary { text-align: center; padding: 50px 0 36px; }
+    .deploy-count   { font-size: 56px; font-weight: 700; color: #9090ff; line-height: 1; }
+    .deploy-summary p { color: #7070a0; margin-top: 8px; margin-bottom: 32px; font-size: 15px; }
+    .deploy-actions { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+
+    /* ── Panels (modal overlays) ── */
+    .panel-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.72);
+      z-index: 200;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .panel-overlay.open { display: flex; }
+    .panel {
+      background: #111128;
+      border-radius: 12px;
+      padding: 28px;
+      width: 100%;
+      max-width: 560px;
+      max-height: 82vh;
+      overflow-y: auto;
+      border: 1px solid #2a2a4a;
+    }
+    .panel-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 22px;
+    }
+    .panel-header h2 { font-size: 17px; color: #9090ff; }
+    .panel-close {
+      background: none; border: none;
+      color: #6060a0; cursor: pointer;
+      font-size: 20px; line-height: 1;
+    }
+    .panel-close:hover { color: #c0c0e0; }
+
+    /* ── Form fields ── */
+    .field { margin-bottom: 16px; }
+    .field label {
+      display: block;
+      font-size: 12px;
+      color: #7070a0;
+      margin-bottom: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .field input {
+      width: 100%;
+      padding: 9px 12px;
+      background: #0a0a1a;
+      border: 1px solid #2a2a4a;
+      border-radius: 6px;
+      color: #d0d0f0;
+      font-size: 13px;
+    }
+    .field input:focus { outline: none; border-color: #5555ff; }
+    .field small { display: block; margin-top: 5px; font-size: 11px; color: #555580; }
+    .price-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+    /* ── Toggle ── */
+    .toggle-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 13px 0;
+      border-bottom: 1px solid #1a1a34;
+    }
+    .toggle-row-label { font-size: 14px; color: #c0c0e0; }
+    .toggle-row-label small { display: block; font-size: 11px; color: #555580; margin-top: 2px; }
+    .toggle {
+      position: relative;
+      width: 44px; height: 24px;
+      background: #22224a;
+      border-radius: 12px;
+      cursor: pointer;
+      border: none;
+      transition: background 0.2s;
+      flex-shrink: 0;
+    }
+    .toggle.on { background: #4a4aff; }
+    .toggle::after {
+      content: '';
+      position: absolute;
+      width: 18px; height: 18px;
+      background: #fff;
+      border-radius: 50%;
+      top: 3px; left: 3px;
+      transition: left 0.2s;
+    }
+    .toggle.on::after { left: 23px; }
+
+    /* ── Usage panel ── */
+    .usage-totals {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      margin-bottom: 22px;
+    }
+    .usage-stat {
+      background: #0a0a1a;
+      border-radius: 8px;
+      padding: 14px 10px;
+      text-align: center;
+    }
+    .usage-stat-value { font-size: 20px; font-weight: 700; color: #9090ff; }
+    .usage-stat-label { font-size: 10px; color: #55558a; margin-top: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .usage-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .usage-table th { text-align: left; padding: 7px 8px; color: #55558a; border-bottom: 1px solid #1a1a34; }
+    .usage-table td { padding: 7px 8px; border-bottom: 1px solid #1a1a34; color: #b0b0d0; }
+
+    /* ── Version history ── */
+    .version-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px;
+      background: #0a0a1a;
+      border-radius: 8px;
+      margin-bottom: 8px;
+    }
+    .version-meta { font-size: 13px; color: #c0c0e0; }
+    .version-meta small { display: block; color: #55558a; margin-top: 2px; font-size: 11px; }
+  </style>
+</head>
+<body>
+
+<!-- ═══ TOP BAR ═══ -->
+<div class="topbar">
+  <span class="topbar-title">QUESTION BUILDER</span>
+  <div class="topbar-actions">
+    <button class="btn btn-ghost btn-sm" onclick="UsageTracker.open()">Usage</button>
+    <button class="btn btn-ghost btn-sm" onclick="VersionHistory.open()">History</button>
+    <button class="btn btn-ghost btn-sm" onclick="SettingsPanel.open()">Settings</button>
+  </div>
+</div>
+
+<!-- ═══ SCREEN: START ═══ -->
+<div id="screen-start" class="screen active">
+  <div class="content">
+    <div class="start-hero">
+      <h1>Question Builder</h1>
+      <p>Upload study files and generate Space Quiz questions with an LLM.</p>
+      <div class="start-actions">
+        <button class="btn btn-primary" onclick="App.goTo('upload')">Get Started</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ SCREEN: UPLOAD ═══ -->
+<div id="screen-upload" class="screen">
+  <div class="content">
+    <h2 class="section-title">Upload Files</h2>
+    <div id="alert-upload"></div>
+    <div class="drop-zone" id="drop-zone" onclick="document.getElementById('file-input').click()">
+      <input type="file" id="file-input" multiple accept=".docx,.java,.jpg,.jpeg,.png"
+             onchange="FileIngestor.onFileSelect(event)">
+      <h2>Drop files here or click to browse</h2>
+      <p>Accepts: .docx &nbsp;·&nbsp; .java &nbsp;·&nbsp; .jpg / .jpeg / .png</p>
+    </div>
+    <div id="file-list" class="file-list"></div>
+    <div class="row-end">
+      <button class="btn btn-ghost" onclick="FileIngestor.undo()">Undo (Clear Files)</button>
+      <button class="btn btn-primary" id="btn-generate" disabled onclick="App.generate()">
+        Generate Questions
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ SCREEN: GENERATING ═══ -->
+<div id="screen-generating" class="screen">
+  <div class="content">
+    <div class="loading">
+      <div class="spinner"></div>
+      <p class="text-muted">Sending files to LLM — this may take a moment…</p>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ SCREEN: REVIEW ═══ -->
+<div id="screen-review" class="screen">
+  <div class="content">
+    <div id="alert-review"></div>
+    <div class="row-between">
+      <h2 class="section-title" style="margin:0">Review Questions</h2>
+      <div class="row-gap">
+        <button class="btn btn-secondary btn-sm" onclick="ReviewUI.approveAll()">Approve All</button>
+        <button class="btn btn-secondary btn-sm" onclick="ReviewUI.rejectAll()">Reject All</button>
+        <button class="btn btn-ghost btn-sm"     onclick="ReviewUI.undoLastReject()">Undo</button>
+      </div>
+    </div>
+    <div id="question-cards"></div>
+    <div class="row-end" style="align-items:center">
+      <span class="text-muted" id="review-count"></span>
+      <button class="btn btn-success" id="btn-deploy-review" onclick="App.deployFromReview()">
+        Deploy Approved
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ SCREEN: DEPLOY ═══ -->
+<div id="screen-deploy" class="screen">
+  <div class="content">
+    <div class="deploy-summary">
+      <div class="deploy-count" id="deploy-count">0</div>
+      <p>questions ready to download</p>
+      <div class="deploy-actions">
+        <button class="btn btn-success" onclick="DeployManager.download()">
+          Download questions.json
+        </button>
+        <button class="btn btn-ghost btn-sm" onclick="DeployManager.undoDownload()">
+          Undo — re-download previous version
+        </button>
+        <button class="btn btn-ghost btn-sm" onclick="App.goTo('start')">Back to Start</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ PANEL: SETTINGS ═══ -->
+<div class="panel-overlay" id="panel-settings">
+  <div class="panel">
+    <div class="panel-header">
+      <h2>Settings</h2>
+      <button class="panel-close" onclick="SettingsPanel.close()">✕</button>
+    </div>
+    <div class="field">
+      <label>API Key</label>
+      <input type="password" id="s-api-key" placeholder="Paste your API key here">
+      <small>Stored in localStorage. This tool runs locally — key is not sent anywhere except your LLM endpoint.</small>
+    </div>
+    <div class="field">
+      <label>Model Endpoint URL</label>
+      <input type="text" id="s-endpoint" placeholder="https://api.openai.com/v1/chat/completions">
+    </div>
+    <div class="field">
+      <label>Model Name</label>
+      <input type="text" id="s-model" placeholder="gpt-4o  or  claude-3-5-sonnet-20241022">
+    </div>
+    <div class="field">
+      <label>Token Pricing (optional — for cost estimates)</label>
+      <div class="price-row">
+        <div>
+          <input type="number" id="s-price-in" placeholder="Input $/1M" step="0.01" min="0">
+          <small>Input tokens per 1M</small>
+        </div>
+        <div>
+          <input type="number" id="s-price-out" placeholder="Output $/1M" step="0.01" min="0">
+          <small>Output tokens per 1M</small>
+        </div>
+      </div>
+    </div>
+    <div class="toggle-row">
+      <div class="toggle-row-label">
+        Skip human review
+        <small>Auto-approve all generated questions and go straight to deploy</small>
+      </div>
+      <button class="toggle" id="toggle-skip" onclick="SettingsPanel.flipSkip()"></button>
+    </div>
+    <div class="row-end" style="margin-top:20px">
+      <button class="btn btn-ghost"    onclick="SettingsPanel.close()">Cancel</button>
+      <button class="btn btn-primary"  onclick="SettingsPanel.save()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ PANEL: USAGE ═══ -->
+<div class="panel-overlay" id="panel-usage">
+  <div class="panel">
+    <div class="panel-header">
+      <h2>Usage</h2>
+      <button class="panel-close" onclick="UsageTracker.close()">✕</button>
+    </div>
+    <div class="usage-totals" id="usage-totals"></div>
+    <div id="usage-table-wrap"></div>
+    <p class="text-muted" style="margin-top:16px">
+      To check your remaining balance, visit your provider dashboard.
+    </p>
+  </div>
+</div>
+
+<!-- ═══ PANEL: VERSION HISTORY ═══ -->
+<div class="panel-overlay" id="panel-history">
+  <div class="panel">
+    <div class="panel-header">
+      <h2>Version History</h2>
+      <button class="panel-close" onclick="VersionHistory.close()">✕</button>
+    </div>
+    <div id="version-list"></div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mammoth@1.6.0/mammoth.browser.min.js"></script>
+<script>
+'use strict';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// App State
+// ─────────────────────────────────────────────────────────────────────────────
+const state = {
+  files:        [],    // { name, kind:'text'|'image', content, mimeType? }
+  questions:    [],    // parsed from LLM
+  lastRejected: null,  // index of most recently rejected card (for undo)
+  pendingDeploy: null  // approved question array waiting to be downloaded
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// StorageManager
+// ─────────────────────────────────────────────────────────────────────────────
+const StorageManager = {
+  get(key, fallback = null) {
+    try {
+      const v = localStorage.getItem(key);
+      return v !== null ? JSON.parse(v) : fallback;
+    } catch { return fallback; }
+  },
+  set(key, value) {
+    try { localStorage.setItem(key, JSON.stringify(value)); }
+    catch (e) { console.error('localStorage write failed:', e); }
+  },
+  getRaw(key) { return localStorage.getItem(key) || ''; },
+  setRaw(key, val) { localStorage.setItem(key, val); },
+  remove(key) { localStorage.removeItem(key); },
+
+  getSettings() {
+    return {
+      apiKey:      this.getRaw('qb_api_key'),
+      endpoint:    this.getRaw('qb_endpoint'),
+      model:       this.getRaw('qb_model'),
+      priceInput:  parseFloat(this.getRaw('qb_price_in'))  || null,
+      priceOutput: parseFloat(this.getRaw('qb_price_out')) || null,
+      skipReview:  this.getRaw('qb_skip_review') === 'true'
+    };
+  },
+  saveSettings({ apiKey, endpoint, model, priceInput, priceOutput, skipReview }) {
+    this.setRaw('qb_api_key',     apiKey);
+    this.setRaw('qb_endpoint',    endpoint);
+    this.setRaw('qb_model',       model);
+    this.setRaw('qb_skip_review', skipReview ? 'true' : 'false');
+    if (priceInput  !== null && priceInput  !== '') this.setRaw('qb_price_in',  priceInput);
+    else this.remove('qb_price_in');
+    if (priceOutput !== null && priceOutput !== '') this.setRaw('qb_price_out', priceOutput);
+    else this.remove('qb_price_out');
+  }
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// UsageTracker
+// ─────────────────────────────────────────────────────────────────────────────
+const UsageTracker = {
+  log(model, inputTokens, outputTokens) {
+    const { priceInput, priceOutput } = StorageManager.getSettings();
+    const cost = (priceInput !== null && priceOutput !== null)
+      ? (inputTokens * priceInput / 1_000_000) + (outputTokens * priceOutput / 1_000_000)
+      : null;
+    const log = StorageManager.get('qb_usage_log', []);
+    log.unshift({ ts: new Date().toISOString(), model: model || 'unknown', inputTokens, outputTokens, cost });
+    StorageManager.set('qb_usage_log', log);
+  },
+
+  totals() {
+    return StorageManager.get('qb_usage_log', []).reduce(
+      (acc, e) => {
+        acc.inputTokens  += e.inputTokens  || 0;
+        acc.outputTokens += e.outputTokens || 0;
+        if (e.cost !== null) acc.cost += e.cost;
+        return acc;
+      },
+      { inputTokens: 0, outputTokens: 0, cost: 0 }
+    );
+  },
+
+  open() {
+    const log      = StorageManager.get('qb_usage_log', []);
+    const totals   = this.totals();
+    const hasCost  = StorageManager.getSettings().priceInput !== null;
+
+    document.getElementById('usage-totals').innerHTML = `
+      <div class="usage-stat">
+        <div class="usage-stat-value">${totals.inputTokens.toLocaleString()}</div>
+        <div class="usage-stat-label">Input Tokens</div>
+      </div>
+      <div class="usage-stat">
+        <div class="usage-stat-value">${totals.outputTokens.toLocaleString()}</div>
+        <div class="usage-stat-label">Output Tokens</div>
+      </div>
+      <div class="usage-stat">
+        <div class="usage-stat-value">${hasCost ? '$' + totals.cost.toFixed(4) : '—'}</div>
+        <div class="usage-stat-label">${hasCost ? 'Est. Spent' : 'Set pricing\nin Settings'}</div>
+      </div>`;
+
+    document.getElementById('usage-table-wrap').innerHTML = log.length === 0
+      ? '<p class="text-muted">No calls logged yet.</p>'
+      : `<table class="usage-table">
+           <thead><tr>
+             <th>Time</th><th>Model</th><th>In</th><th>Out</th><th>Est. Cost</th>
+           </tr></thead>
+           <tbody>${log.map(e => `
+             <tr>
+               <td>${new Date(e.ts).toLocaleString()}</td>
+               <td>${e.model}</td>
+               <td>${e.inputTokens.toLocaleString()}</td>
+               <td>${e.outputTokens.toLocaleString()}</td>
+               <td>${e.cost !== null ? '$' + e.cost.toFixed(4) : '—'}</td>
+             </tr>`).join('')}
+           </tbody>
+         </table>`;
+
+    document.getElementById('panel-usage').classList.add('open');
+  },
+  close() { document.getElementById('panel-usage').classList.remove('open'); }
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SettingsPanel
+// ─────────────────────────────────────────────────────────────────────────────
+const SettingsPanel = {
+  _skip: false,
+
+  open() {
+    const s = StorageManager.getSettings();
+    document.getElementById('s-api-key').value   = s.apiKey;
+    document.getElementById('s-endpoint').value  = s.endpoint;
+    document.getElementById('s-model').value     = s.model;
+    document.getElementById('s-price-in').value  = s.priceInput  !== null ? s.priceInput  : '';
+    document.getElementById('s-price-out').value = s.priceOutput !== null ? s.priceOutput : '';
+    this._skip = s.skipReview;
+    this._renderToggle();
+    document.getElementById('panel-settings').classList.add('open');
+  },
+  close() { document.getElementById('panel-settings').classList.remove('open'); },
+  flipSkip()  { this._skip = !this._skip; this._renderToggle(); },
+  _renderToggle() {
+    document.getElementById('toggle-skip').classList.toggle('on', this._skip);
+  },
+  save() {
+    StorageManager.saveSettings({
+      apiKey:      document.getElementById('s-api-key').value.trim(),
+      endpoint:    document.getElementById('s-endpoint').value.trim(),
+      model:       document.getElementById('s-model').value.trim(),
+      priceInput:  document.getElementById('s-price-in').value,
+      priceOutput: document.getElementById('s-price-out').value,
+      skipReview:  this._skip
+    });
+    this.close();
+  }
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// VersionHistory
+// ─────────────────────────────────────────────────────────────────────────────
+const VersionHistory = {
+  save(questions) {
+    const versions = StorageManager.get('qb_versions', []);
+    versions.unshift({ ts: new Date().toISOString(), count: questions.length, questions });
+    StorageManager.set('qb_versions', versions);
+  },
+  previous() {
+    const v = StorageManager.get('qb_versions', []);
+    return v.length > 1 ? v[1] : null;
+  },
+  open() {
+    const versions = StorageManager.get('qb_versions', []);
+    document.getElementById('version-list').innerHTML = versions.length === 0
+      ? '<p class="text-muted">No versions saved yet.</p>'
+      : versions.map((v, i) => `
+          <div class="version-item">
+            <div class="version-meta">
+              Version ${versions.length - i}
+              <small>${new Date(v.ts).toLocaleString()} &nbsp;·&nbsp; ${v.count} questions</small>
+            </div>
+            <button class="btn btn-secondary btn-sm" onclick="VersionHistory.redownload(${i})">
+              Download
+            </button>
+          </div>`).join('');
+    document.getElementById('panel-history').classList.add('open');
+  },
+  close() { document.getElementById('panel-history').classList.remove('open'); },
+  redownload(i) {
+    const v = StorageManager.get('qb_versions', []);
+    if (v[i]) DeployManager.triggerDownload(v[i].questions);
+  }
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// FileIngestor
+// ─────────────────────────────────────────────────────────────────────────────
+const FileIngestor = {
+  ALLOWED_EXT: ['docx', 'java', 'jpg', 'jpeg', 'png'],
+
+  init() {
+    const zone = document.getElementById('drop-zone');
+    zone.addEventListener('dragover',  e => { e.preventDefault(); zone.classList.add('drag-over'); });
+    zone.addEventListener('dragleave', ()  => zone.classList.remove('drag-over'));
+    zone.addEventListener('drop', e => {
+      e.preventDefault();
+      zone.classList.remove('drag-over');
+      this.process(Array.from(e.dataTransfer.files));
+    });
+  },
+
+  onFileSelect(event) {
+    this.process(Array.from(event.target.files));
+    event.target.value = '';
+  },
+
+  async process(files) {
+    showAlert('alert-upload', '');
+    for (const file of files) {
+      const ext = file.name.split('.').pop().toLowerCase();
+      if (!this.ALLOWED_EXT.includes(ext)) {
+        showAlert('alert-upload', 'error', `Skipped "${file.name}" — unsupported type. Accepted: .docx, .java, .jpg, .jpeg, .png`);
+        continue;
+      }
+      if (state.files.find(f => f.name === file.name)) continue; // skip duplicates
+      try {
+        state.files.push(await this.readFile(file, ext));
+      } catch (e) {
+        showAlert('alert-upload', 'error', `Could not read "${file.name}": ${e.message}`);
+      }
+    }
+    this.render();
+  },
+
+  readFile(file, ext) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      if (['jpg', 'jpeg', 'png'].includes(ext)) {
+        reader.onload  = e => resolve({
+          name: file.name, kind: 'image',
+          content: e.target.result.split(',')[1], // base64 only
+          mimeType: file.type
+        });
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      } else if (ext === 'docx') {
+        reader.onload  = async e => {
+          try {
+            const result = await mammoth.extractRawText({ arrayBuffer: e.target.result });
+            resolve({ name: file.name, kind: 'text', content: result.value });
+          } catch (err) { reject(err); }
+        };
+        reader.onerror = reject;
+        reader.readAsArrayBuffer(file);
+      } else {
+        // .java — plain text
+        reader.onload  = e => resolve({ name: file.name, kind: 'text', content: e.target.result });
+        reader.onerror = reject;
+        reader.readAsText(file);
+      }
+    });
+  },
+
+  render() {
+    document.getElementById('file-list').innerHTML = state.files.map((f, i) => `
+      <div class="file-item">
+        <span class="file-name">${f.name}</span>
+        <span class="file-kind">${f.kind}</span>
+        <button class="file-remove" onclick="FileIngestor.remove(${i})" title="Remove file">✕</button>
+      </div>`).join('');
+    document.getElementById('btn-generate').disabled = state.files.length === 0;
+  },
+
+  remove(i) { state.files.splice(i, 1); this.render(); },
+  undo()    { state.files = []; this.render(); showAlert('alert-upload', ''); }
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// LLMConnector
+// ─────────────────────────────────────────────────────────────────────────────
+const LLMConnector = {
+  SYSTEM_PROMPT: `You are a quiz question generator. Given study material, generate multiple-choice questions for a space shooter game.
+
+Rules:
+- Each question must have exactly 1 correct answer and exactly 3 wrong answers
+- Keep answers short (under 25 characters — they display inside falling asteroids)
+- Focus on key concepts from the material
+- Aim for 10–20 questions depending on how much material there is
+- Return ONLY a valid JSON array with no other text, no markdown, no code fences
+
+Required format exactly:
+[
+  {
+    "question": "Question text here?",
+    "correct": "Right answer",
+    "wrong": ["Wrong 1", "Wrong 2", "Wrong 3"]
+  }
+]`,
+
+  isAnthropic(endpoint) {
+    return endpoint.includes('anthropic') || endpoint.includes('claude');
+  },
+
+  buildTextContent() {
+    return state.files
+      .filter(f => f.kind === 'text')
+      .map(f => `--- FILE: ${f.name} ---\n${f.content}`)
+      .join('\n\n');
+  },
+
+  // OpenAI-compatible message format (also used by many other providers)
+  buildOpenAIMessages() {
+    const text   = this.buildTextContent();
+    const images = state.files.filter(f => f.kind === 'image');
+    if (images.length === 0) {
+      return [{ role: 'user', content: `${this.SYSTEM_PROMPT}\n\nStudy material:\n${text}` }];
+    }
+    const content = [{ type: 'text', text: `${this.SYSTEM_PROMPT}\n\nStudy material:\n${text}` }];
+    for (const img of images) {
+      content.push({ type: 'text', text: `\n--- IMAGE: ${img.name} (handwritten notes) ---` });
+      content.push({ type: 'image_url', image_url: { url: `data:${img.mimeType};base64,${img.content}` } });
+    }
+    return [{ role: 'user', content }];
+  },
+
+  // Anthropic message format
+  buildAnthropicMessages() {
+    const text   = this.buildTextContent();
+    const images = state.files.filter(f => f.kind === 'image');
+    if (images.length === 0) {
+      return [{ role: 'user', content: `${this.SYSTEM_PROMPT}\n\nStudy material:\n${text}` }];
+    }
+    const content = [{ type: 'text', text: `${this.SYSTEM_PROMPT}\n\nStudy material:\n${text}` }];
+    for (const img of images) {
+      content.push({ type: 'text', text: `\n--- IMAGE: ${img.name} (handwritten notes) ---` });
+      content.push({ type: 'image', source: { type: 'base64', media_type: img.mimeType, data: img.content } });
+    }
+    return [{ role: 'user', content }];
+  },
+
+  async call() {
+    const { apiKey, endpoint, model } = StorageManager.getSettings();
+    if (!apiKey)    throw new Error('No API key set. Open Settings to add one.');
+    if (!endpoint)  throw new Error('No endpoint URL set. Open Settings to configure.');
+
+    const anthr = this.isAnthropic(endpoint);
+    let body, headers;
+
+    if (anthr) {
+      headers = {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      };
+      body = {
+        model:      model || 'claude-3-5-sonnet-20241022',
+        max_tokens: 4096,
+        messages:   this.buildAnthropicMessages()
+      };
+    } else {
+      headers = {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      };
+      body = {
+        model:    model || 'gpt-4o',
+        messages: this.buildOpenAIMessages()
+      };
+    }
+
+    const res = await fetch(endpoint, { method: 'POST', headers, body: JSON.stringify(body) });
+    if (!res.ok) {
+      const msg = await res.text().catch(() => res.statusText);
+      throw new Error(`API error ${res.status}: ${msg}`);
+    }
+
+    const data = await res.json();
+    const text = anthr
+      ? (data.content?.[0]?.text || '')
+      : (data.choices?.[0]?.message?.content || '');
+
+    // Capture token usage from the response
+    const inputTokens  = anthr ? (data.usage?.input_tokens   || 0) : (data.usage?.prompt_tokens    || 0);
+    const outputTokens = anthr ? (data.usage?.output_tokens  || 0) : (data.usage?.completion_tokens || 0);
+    UsageTracker.log(model || (anthr ? 'claude' : 'gpt'), inputTokens, outputTokens);
+
+    return text;
+  },
+
+  parseQuestions(raw) {
+    // Find the JSON array in the response regardless of surrounding text or code fences
+    const start = raw.indexOf('[');
+    const end   = raw.lastIndexOf(']');
+    if (start === -1 || end === -1 || end < start) {
+      throw new Error('No JSON array found in LLM response. Try again or check your model settings.');
+    }
+    const parsed = JSON.parse(raw.slice(start, end + 1));
+    if (!Array.isArray(parsed)) throw new Error('LLM response was not a JSON array.');
+    if (parsed.length === 0)    throw new Error('LLM returned 0 questions. The material may be too short or unclear — try adding more content.');
+    return parsed;
+  }
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ReviewUI
+// ─────────────────────────────────────────────────────────────────────────────
+const ReviewUI = {
+  render(questions) {
+    document.getElementById('question-cards').innerHTML = questions.map((q, i) => `
+      <div class="question-card approved" id="card-${i}">
+        <h3>${i + 1}. ${q.question}</h3>
+        <div class="answer-grid">
+          <div class="answer-item answer-correct">✓ ${q.correct}</div>
+          ${q.wrong.map(w => `<div class="answer-item answer-wrong">✗ ${w}</div>`).join('')}
+        </div>
+        <div class="card-actions">
+          <button class="btn btn-success btn-sm" onclick="ReviewUI.approve(${i})">Approve</button>
+          <button class="btn btn-danger  btn-sm" onclick="ReviewUI.reject(${i})">Reject</button>
+        </div>
+      </div>`).join('');
+    this._updateCount();
+  },
+
+  approve(i) {
+    const card = document.getElementById(`card-${i}`);
+    card.classList.remove('rejected');
+    card.classList.add('approved');
+    this._updateCount();
+  },
+  reject(i) {
+    const card = document.getElementById(`card-${i}`);
+    card.classList.remove('approved');
+    card.classList.add('rejected');
+    state.lastRejected = i;
+    this._updateCount();
+  },
+  approveAll()     { state.questions.forEach((_, i) => this.approve(i)); },
+  rejectAll()      { state.questions.forEach((_, i) => this.reject(i)); },
+  undoLastReject() {
+    if (state.lastRejected !== null) { this.approve(state.lastRejected); state.lastRejected = null; }
+  },
+
+  getApproved() {
+    return state.questions.filter((_, i) => {
+      const c = document.getElementById(`card-${i}`);
+      return c && c.classList.contains('approved');
+    });
+  },
+
+  _updateCount() {
+    const approved = this.getApproved();
+    document.getElementById('review-count').textContent =
+      `${approved.length} of ${state.questions.length} approved`;
+    document.getElementById('btn-deploy-review').disabled = approved.length === 0;
+  }
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DeployManager
+// ─────────────────────────────────────────────────────────────────────────────
+const DeployManager = {
+  validate(questions) {
+    for (const [i, q] of questions.entries()) {
+      if (!q.question || typeof q.question !== 'string')          return `Question ${i+1}: missing "question" text.`;
+      if (!q.correct  || typeof q.correct  !== 'string')          return `Question ${i+1}: missing "correct" answer.`;
+      if (!Array.isArray(q.wrong) || q.wrong.length !== 3)        return `Question ${i+1}: "wrong" must have exactly 3 items.`;
+    }
+    return null;
+  },
+
+  prepare(questions) {
+    const err = this.validate(questions);
+    if (err) { showAlert('alert-review', 'error', err); return false; }
+    state.pendingDeploy = questions;
+    document.getElementById('deploy-count').textContent = questions.length;
+    return true;
+  },
+
+  download() {
+    if (!state.pendingDeploy) return;
+    VersionHistory.save(state.pendingDeploy);
+    this.triggerDownload(state.pendingDeploy);
+  },
+
+  triggerDownload(questions) {
+    const blob = new Blob([JSON.stringify(questions, null, 2)], { type: 'application/json' });
+    const url  = URL.createObjectURL(blob);
+    const a    = Object.assign(document.createElement('a'), { href: url, download: 'questions.json' });
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  },
+
+  undoDownload() {
+    const prev = VersionHistory.previous();
+    if (prev) this.triggerDownload(prev.questions);
+    else alert('No previous version found in history.');
+  }
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// App Controller
+// ─────────────────────────────────────────────────────────────────────────────
+const App = {
+  goTo(name) {
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+    document.getElementById(`screen-${name}`).classList.add('active');
+    window.scrollTo(0, 0);
+  },
+
+  async generate() {
+    const { apiKey } = StorageManager.getSettings();
+    if (!apiKey) {
+      SettingsPanel.open();
+      showAlert('alert-upload', 'info', 'Enter your API key in Settings first, then try again.');
+      return;
+    }
+
+    this.goTo('generating');
+    try {
+      const raw         = await LLMConnector.call();
+      state.questions   = LLMConnector.parseQuestions(raw);
+      state.lastRejected = null;
+
+      if (StorageManager.getSettings().skipReview) {
+        const err = DeployManager.validate(state.questions);
+        if (err) {
+          this.goTo('upload');
+          showAlert('alert-upload', 'error', err);
+        } else {
+          state.pendingDeploy = state.questions;
+          document.getElementById('deploy-count').textContent = state.questions.length;
+          this.goTo('deploy');
+        }
+      } else {
+        this.goTo('review');
+        ReviewUI.render(state.questions);
+      }
+    } catch (e) {
+      this.goTo('upload');
+      showAlert('alert-upload', 'error', e.message);
+    }
+  },
+
+  deployFromReview() {
+    const approved = ReviewUI.getApproved();
+    if (DeployManager.prepare(approved)) this.goTo('deploy');
+  }
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Helpers
+// ─────────────────────────────────────────────────────────────────────────────
+function showAlert(id, type, message = '') {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.innerHTML = type ? `<div class="alert alert-${type}">${message}</div>` : '';
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Init
+// ─────────────────────────────────────────────────────────────────────────────
+FileIngestor.init();
+</script>
+</body>
+</html>

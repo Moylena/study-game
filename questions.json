@@ -1,0 +1,17 @@
+[
+  {
+    "question": "What is the major city of England?",
+    "correct": "London",
+    "wrong": ["Paris", "New York", "Berlin"]
+  },
+  {
+    "question": "What is the major city of the United States?",
+    "correct": "New York",
+    "wrong": ["London", "Paris", "Tokyo"]
+  },
+  {
+    "question": "What is the major city of France?",
+    "correct": "Paris",
+    "wrong": ["London", "Cartagena", "Beijing"]
+  }
+]
