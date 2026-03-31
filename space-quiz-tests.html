@@ -23,7 +23,7 @@
 
     const W  = 800;
     const H  = 600;
-    const ASTEROID_RADIUS = 52;
+    const ASTEROID_RADIUS = 75;
     const ASTEROID_SPEED  = 70;
     const BULLET_SPEED    = 480;
     const GUN_W  = 40;
@@ -158,10 +158,10 @@
       assert(inBounds,
         `${label}: all asteroids start within horizontal canvas bounds`);
 
-      // Asteroids must start above the canvas
-      const aboveCanvas = asteroids.every(a => a.y + a.radius <= 0);
-      assert(aboveCanvas,
-        `${label}: all asteroids start above the canvas (y + radius <= 0)`);
+      // Asteroids must start just below the title bar (centre at 66 + radius)
+      const belowTitle = asteroids.every(a => a.y === 66 + ASTEROID_RADIUS);
+      assert(belowTitle,
+        `${label}: all asteroids start just below the title bar (y === 66 + radius)`);
     });
 
     (() => {

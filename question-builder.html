@@ -471,6 +471,24 @@
 'use strict';
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Helpers
+// ─────────────────────────────────────────────────────────────────────────────
+function escapeHTML(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function showAlert(id, type, message = '') {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.innerHTML = type ? `<div class="alert alert-${type}">${escapeHTML(message)}</div>` : '';
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // App State
 // ─────────────────────────────────────────────────────────────────────────────
 const state = {
@@ -574,7 +592,7 @@ const UsageTracker = {
            <tbody>${log.map(e => `
              <tr>
                <td>${new Date(e.ts).toLocaleString()}</td>
-               <td>${e.model}</td>
+               <td>${escapeHTML(e.model)}</td>
                <td>${e.inputTokens.toLocaleString()}</td>
                <td>${e.outputTokens.toLocaleString()}</td>
                <td>${e.cost !== null ? '$' + e.cost.toFixed(4) : '—'}</td>
@@ -730,8 +748,8 @@ const FileIngestor = {
   render() {
     document.getElementById('file-list').innerHTML = state.files.map((f, i) => `
       <div class="file-item">
-        <span class="file-name">${f.name}</span>
-        <span class="file-kind">${f.kind}</span>
+        <span class="file-name">${escapeHTML(f.name)}</span>
+        <span class="file-kind">${escapeHTML(f.kind)}</span>
         <button class="file-remove" onclick="FileIngestor.remove(${i})" title="Remove file">✕</button>
       </div>`).join('');
     document.getElementById('btn-generate').disabled = state.files.length === 0;
@@ -875,10 +893,10 @@ const ReviewUI = {
   render(questions) {
     document.getElementById('question-cards').innerHTML = questions.map((q, i) => `
       <div class="question-card approved" id="card-${i}">
-        <h3>${i + 1}. ${q.question}</h3>
+        <h3>${i + 1}. ${escapeHTML(q.question)}</h3>
         <div class="answer-grid">
-          <div class="answer-item answer-correct">✓ ${q.correct}</div>
-          ${q.wrong.map(w => `<div class="answer-item answer-wrong">✗ ${w}</div>`).join('')}
+          <div class="answer-item answer-correct">✓ ${escapeHTML(q.correct)}</div>
+          ${q.wrong.map(w => `<div class="answer-item answer-wrong">✗ ${escapeHTML(w)}</div>`).join('')}
         </div>
         <div class="card-actions">
           <button class="btn btn-success btn-sm" onclick="ReviewUI.approve(${i})">Approve</button>
@@ -931,6 +949,7 @@ const DeployManager = {
       if (!q.question || typeof q.question !== 'string')          return `Question ${i+1}: missing "question" text.`;
       if (!q.correct  || typeof q.correct  !== 'string')          return `Question ${i+1}: missing "correct" answer.`;
       if (!Array.isArray(q.wrong) || q.wrong.length !== 3)        return `Question ${i+1}: "wrong" must have exactly 3 items.`;
+      if (q.wrong.some(w => typeof w !== 'string' || w.trim() === '')) return `Question ${i+1}: each item in "wrong" must be a non-empty string.`;
     }
     return null;
   },
@@ -1016,14 +1035,6 @@ const App = {
   }
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Helpers
-// ─────────────────────────────────────────────────────────────────────────────
-function showAlert(id, type, message = '') {
-  const el = document.getElementById(id);
-  if (!el) return;
-  el.innerHTML = type ? `<div class="alert alert-${type}">${message}</div>` : '';
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Init

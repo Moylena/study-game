@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Question Builder — Tests</title>
+  <style>
+    body { background: #111; color: #eee; font: 15px monospace; padding: 24px; }
+    h1   { color: #fff; margin-bottom: 16px; }
+    .pass { color: #4caf50; }
+    .fail { color: #f44336; }
+    .section { margin-top: 20px; color: #aaa; font-weight: bold; }
+    #summary { margin-top: 24px; font-size: 18px; font-weight: bold; }
+  </style>
+</head>
+<body>
+  <h1>Question Builder — Unit Tests</h1>
+  <div id="output"></div>
+  <div id="summary"></div>
+
+  <script>
+    // ── Replicate pure functions from question-builder.html ──────────
+    // (These must stay in sync with the builder file.)
+
+    function escapeHTML(str) {
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    // LLMConnector methods
+    const LLMConnector = {
+      isAnthropic(endpoint) {
+        return endpoint.includes('anthropic') || endpoint.includes('claude');
+      },
+
+      parseQuestions(raw) {
+        const start = raw.indexOf('[');
+        const end   = raw.lastIndexOf(']');
+        if (start === -1 || end === -1 || end < start) {
+          throw new Error('No JSON array found in LLM response. Try again or check your model settings.');
+        }
+        const parsed = JSON.parse(raw.slice(start, end + 1));
+        if (!Array.isArray(parsed)) throw new Error('LLM response was not a JSON array.');
+        if (parsed.length === 0)    throw new Error('LLM returned 0 questions. The material may be too short or unclear — try adding more content.');
+        return parsed;
+      }
+    };
+
+    // DeployManager.validate
+    const DeployManager = {
+      validate(questions) {
+        for (const [i, q] of questions.entries()) {
+          if (!q.question || typeof q.question !== 'string')          return `Question ${i+1}: missing "question" text.`;
+          if (!q.correct  || typeof q.correct  !== 'string')          return `Question ${i+1}: missing "correct" answer.`;
+          if (!Array.isArray(q.wrong) || q.wrong.length !== 3)        return `Question ${i+1}: "wrong" must have exactly 3 items.`;
+          if (q.wrong.some(w => typeof w !== 'string' || w.trim() === '')) return `Question ${i+1}: each item in "wrong" must be a non-empty string.`;
+        }
+        return null;
+      }
+    };
+
+    // ── Test runner ──────────────────────────────────────────────────
+
+    const out = document.getElementById('output');
+    let passed = 0, failed = 0;
+
+    function assert(condition, name) {
+      const el = document.createElement('div');
+      el.className  = condition ? 'pass' : 'fail';
+      el.textContent = (condition ? '\u2713' : '\u2717 FAIL') + '  ' + name;
+      out.appendChild(el);
+      condition ? passed++ : failed++;
+    }
+
+    function assertThrows(fn, name) {
+      let threw = false;
+      try { fn(); } catch (e) { threw = true; }
+      assert(threw, name);
+    }
+
+    function section(title) {
+      const el = document.createElement('div');
+      el.className  = 'section';
+      el.textContent = '\u2500\u2500 ' + title;
+      out.appendChild(el);
+    }
+
+    // ── escapeHTML ───────────────────────────────────────────────────
+
+    section('escapeHTML');
+
+    (() => {
+      assert(escapeHTML('<script>') === '&lt;script&gt;',
+        'escapes < and >');
+      assert(escapeHTML('"quoted"') === '&quot;quoted&quot;',
+        'escapes double quotes');
+      assert(escapeHTML("it's") === 'it&#39;s',
+        'escapes single quotes');
+      assert(escapeHTML('a & b') === 'a &amp; b',
+        'escapes ampersand');
+      assert(escapeHTML('no special chars') === 'no special chars',
+        'plain text passes through unchanged');
+      assert(escapeHTML('<img src=x onerror=alert(1)>') === '&lt;img src=x onerror=alert(1)&gt;',
+        'XSS payload is fully escaped');
+      assert(escapeHTML(42) === '42',
+        'coerces non-string input to string');
+    })();
+
+    // ── LLMConnector.isAnthropic ─────────────────────────────────────
+
+    section('LLMConnector.isAnthropic');
+
+    (() => {
+      assert(LLMConnector.isAnthropic('https://api.anthropic.com/v1/messages'),
+        '"anthropic" in URL → true');
+      assert(LLMConnector.isAnthropic('https://claude.ai/api'),
+        '"claude" in URL → true');
+      assert(LLMConnector.isAnthropic('https://my-claude-proxy.internal/v1'),
+        '"claude" anywhere in URL → true');
+      assert(!LLMConnector.isAnthropic('https://api.openai.com/v1/chat/completions'),
+        'OpenAI URL → false');
+      assert(!LLMConnector.isAnthropic('https://generativelanguage.googleapis.com/v1beta'),
+        'Google endpoint → false');
+      assert(!LLMConnector.isAnthropic('https://api.groq.com/openai/v1'),
+        'Groq endpoint → false');
+      assert(!LLMConnector.isAnthropic(''),
+        'empty string → false');
+    })();
+
+    // ── LLMConnector.parseQuestions ──────────────────────────────────
+
+    section('LLMConnector.parseQuestions');
+
+    (() => {
+      // Valid bare JSON array
+      const valid = JSON.stringify([
+        { question: 'Q1?', correct: 'A', wrong: ['B', 'C', 'D'] }
+      ]);
+      const result = LLMConnector.parseQuestions(valid);
+      assert(Array.isArray(result) && result.length === 1,
+        'valid JSON array → returns parsed array');
+      assert(result[0].question === 'Q1?',
+        'parsed object preserves question field');
+
+      // JSON wrapped in markdown code fence (common LLM output)
+      const fenced = '```json\n' + valid + '\n```';
+      const fencedResult = LLMConnector.parseQuestions(fenced);
+      assert(fencedResult.length === 1,
+        'JSON inside markdown code fences is parsed correctly');
+
+      // JSON with surrounding prose
+      const withProse = 'Here are your questions:\n' + valid + '\nHope that helps!';
+      const proseResult = LLMConnector.parseQuestions(withProse);
+      assert(proseResult.length === 1,
+        'JSON array extracted correctly when surrounded by prose');
+
+      // Multiple questions
+      const multi = JSON.stringify([
+        { question: 'Q1?', correct: 'A', wrong: ['B', 'C', 'D'] },
+        { question: 'Q2?', correct: 'X', wrong: ['Y', 'Z', 'W'] },
+      ]);
+      assert(LLMConnector.parseQuestions(multi).length === 2,
+        'multiple questions parsed correctly');
+    })();
+
+    (() => {
+      // No JSON array in response
+      assertThrows(() => LLMConnector.parseQuestions('Sorry, I cannot help with that.'),
+        'no JSON array → throws');
+
+      // Empty array
+      assertThrows(() => LLMConnector.parseQuestions('[]'),
+        'empty JSON array → throws');
+
+      // Malformed JSON
+      assertThrows(() => LLMConnector.parseQuestions('[{bad json'),
+        'malformed JSON → throws');
+
+      // end index before start index (e.g. only a "]" with no "[")
+      assertThrows(() => LLMConnector.parseQuestions(']no opening bracket'),
+        'end before start → throws');
+    })();
+
+    // ── DeployManager.validate ───────────────────────────────────────
+
+    section('DeployManager.validate');
+
+    (() => {
+      const good = [
+        { question: 'What is 2+2?', correct: '4', wrong: ['1', '2', '3'] }
+      ];
+      assert(DeployManager.validate(good) === null,
+        'valid single question → returns null');
+
+      const goodMulti = [
+        { question: 'Q1?', correct: 'A', wrong: ['B', 'C', 'D'] },
+        { question: 'Q2?', correct: 'X', wrong: ['Y', 'Z', 'W'] },
+      ];
+      assert(DeployManager.validate(goodMulti) === null,
+        'multiple valid questions → returns null');
+
+      assert(DeployManager.validate([]) === null,
+        'empty array → returns null (nothing to fail)');
+    })();
+
+    (() => {
+      // Missing question field
+      const noQ = [{ question: '', correct: 'A', wrong: ['B', 'C', 'D'] }];
+      assert(typeof DeployManager.validate(noQ) === 'string',
+        'empty question string → returns error message');
+
+      const missingQ = [{ correct: 'A', wrong: ['B', 'C', 'D'] }];
+      assert(typeof DeployManager.validate(missingQ) === 'string',
+        'missing question field → returns error message');
+
+      // Non-string question
+      const numQ = [{ question: 42, correct: 'A', wrong: ['B', 'C', 'D'] }];
+      assert(typeof DeployManager.validate(numQ) === 'string',
+        'numeric question → returns error message');
+
+      // Missing correct field
+      const noCorrect = [{ question: 'Q?', correct: '', wrong: ['B', 'C', 'D'] }];
+      assert(typeof DeployManager.validate(noCorrect) === 'string',
+        'empty correct string → returns error message');
+
+      const missingCorrect = [{ question: 'Q?', wrong: ['B', 'C', 'D'] }];
+      assert(typeof DeployManager.validate(missingCorrect) === 'string',
+        'missing correct field → returns error message');
+
+      // Wrong array wrong length
+      const twoWrong = [{ question: 'Q?', correct: 'A', wrong: ['B', 'C'] }];
+      assert(typeof DeployManager.validate(twoWrong) === 'string',
+        'only 2 wrong answers → returns error message');
+
+      const fourWrong = [{ question: 'Q?', correct: 'A', wrong: ['B', 'C', 'D', 'E'] }];
+      assert(typeof DeployManager.validate(fourWrong) === 'string',
+        '4 wrong answers → returns error message');
+
+      const noWrong = [{ question: 'Q?', correct: 'A' }];
+      assert(typeof DeployManager.validate(noWrong) === 'string',
+        'missing wrong field entirely → returns error message');
+
+      // Wrong items are not strings
+      const numWrong = [{ question: 'Q?', correct: 'A', wrong: [1, 2, 3] }];
+      assert(typeof DeployManager.validate(numWrong) === 'string',
+        'numeric wrong items → returns error message');
+
+      // Wrong item is empty string
+      const emptyWrong = [{ question: 'Q?', correct: 'A', wrong: ['B', '', 'D'] }];
+      assert(typeof DeployManager.validate(emptyWrong) === 'string',
+        'empty string in wrong array → returns error message');
+
+      // Error message mentions the question number
+      const q2bad = [
+        { question: 'Q1?', correct: 'A', wrong: ['B', 'C', 'D'] },
+        { question: 'Q2?', correct: 'A', wrong: ['B', 'C'] },  // only 2 wrong
+      ];
+      const errMsg = DeployManager.validate(q2bad);
+      assert(typeof errMsg === 'string' && errMsg.includes('2'),
+        'error message references the failing question number');
+    })();
+
+    // ── Summary ──────────────────────────────────────────────────────
+
+    const summary = document.getElementById('summary');
+    const total   = passed + failed;
+    summary.style.color = failed === 0 ? '#4caf50' : '#f44336';
+    summary.textContent = `${passed} / ${total} tests passed${failed > 0 ? ` — ${failed} FAILED` : ' — all clear'}`;
+  </script>
+</body>
+</html>
