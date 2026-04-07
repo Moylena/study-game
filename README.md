@@ -72,6 +72,10 @@ The review step is intentional — it's a check that the LLM correctly translate
 
 Browser-based unit tests covering the pure logic in both tools: collision detection, question validation, shuffle algorithms, HTML sanitization. Open either file in a browser and the results render inline.
 
+![Space Quiz tests passing](assets/sq_unit_test_1.png)
+
+![Question Builder tests passing](assets/qb_unit_test_1.png)
+
 ---
 
 ## Technical Snapshot
