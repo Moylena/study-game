@@ -1,0 +1,21 @@
+# Mac system files
+.DS_Store
+
+# Working notes and internal docs
+SESSION_NOTES.md
+IT_REVIEW.md
+DEVELOPER_OVERVIEW.md
+KNOWLEDGE_BASE.md
+STYLE_GUIDE.md
+LEARNING_LOG.md
+RQ3_space_game_wlogging.md
+
+# Class files and scratch work
+CS111/
+box.java
+style_guide.html
+tictactoe.html
+
+# Duplicate question files
+questions 2.json
+questions1.json

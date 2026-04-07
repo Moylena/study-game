@@ -1,17 +1,83 @@
 [
   {
-    "question": "What is the major city of England?",
-    "correct": "London",
-    "wrong": ["Paris", "New York", "Berlin"]
+    "question": "What is a Java array?",
+    "correct": "Linear data structure",
+    "wrong": [
+      "Circular structure",
+      "Dynamic list",
+      "Hash table"
+    ]
   },
   {
-    "question": "What is the major city of the United States?",
-    "correct": "New York",
-    "wrong": ["London", "Paris", "Tokyo"]
+    "question": "What index does a Java array start at?",
+    "correct": "0",
+    "wrong": [
+      "1",
+      "-1",
+      "n"
+    ]
   },
   {
-    "question": "What is the major city of France?",
-    "correct": "Paris",
-    "wrong": ["London", "Cartagena", "Beijing"]
+    "question": "What is the last index of an array of length n?",
+    "correct": "n-1",
+    "wrong": [
+      "n",
+      "n+1",
+      "n-2"
+    ]
+  },
+  {
+    "question": "What type of structure is a Java array?",
+    "correct": "Object",
+    "wrong": [
+      "Primitive",
+      "Interface",
+      "Abstract class"
+    ]
+  },
+  {
+    "question": "Can an array hold different data types?",
+    "correct": "No, must match",
+    "wrong": [
+      "Yes, any type",
+      "Only primitives",
+      "Only objects"
+    ]
+  },
+  {
+    "question": "Is the length of a Java array mutable?",
+    "correct": "No, immutable",
+    "wrong": [
+      "Yes, mutable",
+      "Only at runtime",
+      "Depends on type"
+    ]
+  },
+  {
+    "question": "Are array elements mutable in Java?",
+    "correct": "Yes, mutable",
+    "wrong": [
+      "No, immutable",
+      "Only primitives",
+      "Only strings"
+    ]
+  },
+  {
+    "question": "Can the data type of an array be changed?",
+    "correct": "No, immutable",
+    "wrong": [
+      "Yes, anytime",
+      "Only with cast",
+      "At compile time"
+    ]
+  },
+  {
+    "question": "Java arrays possess additional methods because they are...",
+    "correct": "Objects",
+    "wrong": [
+      "Primitives",
+      "Interfaces",
+      "Enums"
+    ]
   }
 ]

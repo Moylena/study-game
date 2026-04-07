@@ -3,10 +3,13 @@
 <head>
   <meta charset="UTF-8">
   <title>Space Quiz</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=VT323&family=Share+Tech+Mono&display=swap" rel="stylesheet">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
-      background: #111;
+      background: #0D0F1A;
       display: flex;
       justify-content: center;
       align-items: center;
@@ -17,7 +20,7 @@
       display: inline-block;
       line-height: 0;
     }
-    canvas { border: 2px solid #555; display: block; }
+    canvas { border: 2px solid #1E2448; display: block; }
     #initials-wrap {
       position: absolute;
       top: 308px;
@@ -26,24 +29,24 @@
       display: flex;
       align-items: center;
       gap: 10px;
-      font: 14px monospace;
-      color: #666;
+      font: 16px 'Share Tech Mono', monospace;
+      color: #9AB0C8;
       white-space: nowrap;
     }
     #initials-wrap.hidden { display: none; }
     #initials-input {
       width: 58px;
       padding: 5px 8px;
-      background: #1a1a1a;
-      border: 1px solid #444;
+      background: #111428;
+      border: 1px solid #1E2448;
       border-radius: 4px;
-      color: #fff;
-      font: 15px monospace;
+      color: #E0E4F0;
+      font: 17px 'Share Tech Mono', monospace;
       text-align: center;
       text-transform: uppercase;
       letter-spacing: 3px;
     }
-    #initials-input:focus { outline: none; border-color: #999; }
+    #initials-input:focus { outline: none; border-color: #5A7FFF; }
   </style>
 </head>
 <body>
@@ -62,51 +65,119 @@
     const W  = 800;
     const H  = 600;
     const ASTEROID_RADIUS = 75;
-    const ASTEROID_SPEED  = 42;   // px/s  — roughly 10 s on screen
-    const BULLET_SPEED    = 480;  // px/s
-    const GUN_SPEED       = 300;  // px/s
+    const ASTEROID_SPEED  = 42;
+    const BULLET_SPEED    = 480;
+    const GUN_SPEED       = 300;
     const GUN_W  = 40;
-    const GUN_H  = 50;
+    const GUN_H  = 62;
     const BUL_W  = 4;
     const BUL_H  = 14;
-    const END_MS = 5000;          // ms before auto-return to start screen
+    const END_MS = 5000;
 
-    // ── Questions (loaded from questions.json at boot) ────────────
+    // ── Style guide colours ────────────────────────────────────────
+    const C = {
+      bg:     '#0D0F1A',
+      navy:   '#111428',
+      panel:  '#1E2448',
+      white:  '#E0E4F0',
+      grey:   '#9AB0C8',
+      green:  '#5AFF8A',
+      blue:   '#5A7FFF',
+      red:    '#FF5A5A',
+      amber:  '#FFB83A',
+      violet: '#C87AFF',
+    };
+
+    const F = {
+      header: "'VT323', monospace",
+      mono:   "'Share Tech Mono', monospace",
+    };
+
+    // ── Asteroid colours ───────────────────────────────────────────
+    const ASTEROID_COLORS = [
+      { fill: '#0A1230', stroke: C.blue   },
+      { fill: '#160B2E', stroke: C.violet },
+      { fill: '#1A1100', stroke: C.amber  },
+      { fill: '#1E0808', stroke: C.red    },
+    ];
+
+    // ── Pixel ship ─────────────────────────────────────────────────
+    const SHIP_P = 6;
+    const SHIP_ROWS = [
+      [0,  0,  0,  0, 'G','G',  0,  0,  0,  0],
+      [0,  0,  0, 'W','W','W','W',  0,  0,  0],
+      [0,  0, 'W','W','W','W','W','W',  0,  0],
+      [0, 'W','W','B','W','W','B','W','W',  0],
+      ['w','W','W','W','W','W','W','W','W','w'],
+      ['w','w','W','W','W','W','W','W','w','w'],
+      [0, 'w','w',  0,'w','w',  0,'w','w',  0],
+      [0, 'A','A',  0,'R','R',  0,'A','A',  0],
+      [0,  0, 'A',  0,'R','R',  0,'A',  0,  0],
+      [0,  0,  0,  0,'R',  0,  0,  0,  0,  0],
+    ];
+    const SHIP_COLORS = {
+      G: C.green,
+      W: C.white,
+      w: C.grey,
+      B: C.blue,
+      A: C.amber,
+      R: C.red,
+    };
+
+    function drawShip(cx) {
+      const tx = Math.round(cx) - (SHIP_P * 5);
+      const ty = H - GUN_H + 4;
+      for (let r = 0; r < SHIP_ROWS.length; r++) {
+        for (let c = 0; c < SHIP_ROWS[r].length; c++) {
+          const code = SHIP_ROWS[r][c];
+          if (!code) continue;
+          ctx.fillStyle = SHIP_COLORS[code];
+          ctx.fillRect(tx + c * SHIP_P, ty + r * SHIP_P, SHIP_P, SHIP_P);
+        }
+      }
+    }
+
+    // ── Starfield ──────────────────────────────────────────────────
+    const STARS = Array.from({ length: 130 }, () => ({
+      x:       Math.random() * W,
+      y:       Math.random() * H,
+      opacity: 0.12 + Math.random() * 0.32,
+      size:    Math.random() < 0.07 ? 2 : 1,
+    }));
+
+    function drawStars() {
+      const scrollY = state === 'START' ? (performance.now() * 0.02) % H : 0;
+      for (const s of STARS) {
+        const sy = (s.y + scrollY) % H;
+        ctx.fillStyle = `rgba(224,228,240,${s.opacity})`;
+        ctx.fillRect(Math.floor(s.x), Math.floor(sy), s.size, s.size);
+      }
+    }
+
+    // ── Questions ──────────────────────────────────────────────────
     let QUESTIONS = [];
     let errorMsg  = '';
 
-    // ── Boot: fetch questions.json ─────────────────────────────────
-
-    /** Validate that loaded JSON matches the expected shape */
     function validateQuestions(data) {
       if (!Array.isArray(data) || data.length === 0) return 'File must contain a non-empty array.';
       for (let i = 0; i < data.length; i++) {
         const q = data[i];
-        if (!q.question)                                        return `Question ${i + 1}: missing "question" field.`;
-        if (q.correct === undefined || q.correct === null)      return `Question ${i + 1}: missing "correct" field.`;
-        if (!Array.isArray(q.wrong) || q.wrong.length !== 3)   return `Question ${i + 1}: "wrong" must be an array of exactly 3 answers.`;
+        if (!q.question)                                       return `Question ${i + 1}: missing "question" field.`;
+        if (q.correct === undefined || q.correct === null)     return `Question ${i + 1}: missing "correct" field.`;
+        if (!Array.isArray(q.wrong) || q.wrong.length !== 3)  return `Question ${i + 1}: "wrong" must be an array of exactly 3 answers.`;
       }
-      return null;  // null = valid
+      return null;
     }
 
-    async function boot() {
+    const EMBEDDED_QUESTIONS = [{"question":"What is a Java array?","correct":"Linear data structure","wrong":["Circular structure","Dynamic list","Hash table"]},{"question":"What index does a Java array start at?","correct":"0","wrong":["1","-1","n"]},{"question":"What is the last index of an array of length n?","correct":"n-1","wrong":["n","n+1","n-2"]},{"question":"What type of structure is a Java array?","correct":"Object","wrong":["Primitive","Interface","Abstract class"]},{"question":"Can an array hold different data types?","correct":"No, must match","wrong":["Yes, any type","Only primitives","Only objects"]},{"question":"Is the length of a Java array mutable?","correct":"No, immutable","wrong":["Yes, mutable","Only at runtime","Depends on type"]},{"question":"Are array elements mutable in Java?","correct":"Yes, mutable","wrong":["No, immutable","Only primitives","Only strings"]},{"question":"Can the data type of an array be changed?","correct":"No, immutable","wrong":["Yes, anytime","Only with cast","At compile time"]},{"question":"Java arrays possess additional methods because they are...","correct":"Objects","wrong":["Primitives","Interfaces","Enums"]}];
+
+    function boot() {
       state = 'LOADING';
       render();
       try {
-        const res = await fetch('questions.json');
-        if (!res.ok) throw new Error(`Could not load questions.json (HTTP ${res.status}). Make sure the file exists in the same folder.`);
-
-        let data;
-        try {
-          data = await res.json();
-        } catch (e) {
-          throw new Error(`questions.json has a syntax error — check for missing commas, unclosed brackets, or unquoted text. (${e.message})`);
-        }
-
+        const data = EMBEDDED_QUESTIONS;
         const err = validateQuestions(data);
         if (err) throw new Error(err);
-
-        // Normalise: convert all answer values to strings so numbers work fine
         QUESTIONS = data.map(q => ({
           question: String(q.question),
           correct:  String(q.correct),
@@ -118,12 +189,12 @@
         state    = 'ERROR';
       }
       syncInputVisibility();
-      render();
+      if (rafId) cancelAnimationFrame(rafId);
+      rafId = requestAnimationFrame(loop);
     }
 
-    // ── Pure / testable functions ──────────────────────────────────
+    // ── Pure functions ─────────────────────────────────────────────
 
-    /** Fisher-Yates shuffle — returns a new array, does not mutate input */
     function shuffleArray(arr) {
       const a = arr.slice();
       for (let i = a.length - 1; i > 0; i--) {
@@ -133,93 +204,68 @@
       return a;
     }
 
-    /**
-     * Build four asteroids for a question.
-     * Each asteroid is placed in one of four non-overlapping horizontal zones
-     * at a random x position within that zone. Zones are shuffled so
-     * the correct answer's position is unpredictable.
-     */
     function buildAsteroids(qObj) {
       const answers = shuffleArray([qObj.correct, ...qObj.wrong]);
       const zones   = shuffleArray([0, 1, 2, 3]);
       return answers.map((answer, i) => {
-        const z    = zones[i];
-        const pad  = ASTEROID_RADIUS + 10;          // keep circle fully on-screen
+        const z   = zones[i];
+        const pad = ASTEROID_RADIUS + 10;
         const minX = z * (W / 4) + pad;
         const maxX = (z + 1) * (W / 4) - pad;
         return {
           x:         minX + Math.random() * (maxX - minX),
-          y:         66 + ASTEROID_RADIUS,             // start just below the title bar
+          y:         66 + ASTEROID_RADIUS,
           answer,
           isCorrect: answer === qObj.correct,
           radius:    ASTEROID_RADIUS,
+          colorIdx:  i,
         };
       });
     }
 
-    /**
-     * Draw answer text inside an asteroid circle with word-wrapping.
-     * Multi-line answers get a dark background behind each line so
-     * text stays readable against the asteroid stroke.
-     */
     function drawAsteroidText(ctx, text, cx, cy, radius) {
-      const fontSize   = 12;
-      const lineHeight = 17;
+      const fontSize   = 16;
+      const lineHeight = 21;
       const maxWidth   = radius * 1.5;
-
-      ctx.font      = `bold ${fontSize}px monospace`;
+      ctx.font      = `bold ${fontSize}px ${F.mono}`;
       ctx.textAlign = 'center';
-
-      // Word-wrap into lines that fit within maxWidth
       const words = text.split(' ');
       const lines  = [];
       let line = '';
       for (const word of words) {
         const test = line ? line + ' ' + word : word;
-        if (ctx.measureText(test).width > maxWidth && line) {
-          lines.push(line);
-          line = word;
-        } else {
-          line = test;
-        }
+        if (ctx.measureText(test).width > maxWidth && line) { lines.push(line); line = word; }
+        else line = test;
       }
       if (line) lines.push(line);
-
       const totalHeight = lines.length * lineHeight;
-      const startY      = cy - totalHeight / 2 + fontSize;
-      const needsBg     = lines.length > 1;
-
+      const startY = cy - totalHeight / 2 + fontSize;
+      const needsBg = lines.length > 1;
       for (let i = 0; i < lines.length; i++) {
         const y = startY + i * lineHeight;
         if (needsBg) {
           const w = ctx.measureText(lines[i]).width;
-          ctx.fillStyle = 'rgba(0, 0, 0, 0.72)';
+          ctx.fillStyle = 'rgba(13,15,26,0.85)';
           ctx.fillRect(cx - w / 2 - 3, y - fontSize, w + 6, fontSize + 4);
         }
-        ctx.fillStyle = '#fff';
+        ctx.fillStyle = C.white;
         ctx.fillText(lines[i], cx, y);
       }
     }
 
-    /** True if the bullet's centre point is inside the asteroid's circle */
     function bulletHitsAsteroid(b, a) {
-      const cx = b.x + BUL_W / 2;
-      const cy = b.y + BUL_H / 2;
-      const dx = cx - a.x;
-      const dy = cy - a.y;
+      const cx = b.x + BUL_W / 2, cy = b.y + BUL_H / 2;
+      const dx = cx - a.x, dy = cy - a.y;
       return (dx * dx + dy * dy) < (a.radius * a.radius);
     }
 
-    /** True when the asteroid's bottom edge has reached the canvas floor */
-    function asteroidReachedBottom(a) {
-      return a.y + a.radius >= H;
-    }
+    function asteroidReachedBottom(a) { return a.y + a.radius >= H; }
 
     // ── Mutable state ──────────────────────────────────────────────
-    let state           = 'LOADING'; // 'LOADING'|'ERROR'|'START'|'PLAYING'|'WRONG_ANSWER'|'END'
+    let state           = 'LOADING';
     let score           = 0;
     let qIndex          = 0;
-    let qId             = 0;        // increments each time a new question loads
+    let qId             = 0;
     let asteroids       = [];
     let bullets         = [];
     let gunX            = W / 2;
@@ -227,151 +273,111 @@
     let endTitle        = '';
     let endTimer        = null;
     let endStartTs      = 0;
-    let wrongQuestion   = null;     // question obj shown on wrong-answer screen
-    let wrongChosen     = '';       // the answer text the player shot
+    let wrongQuestion   = null;
+    let wrongChosen     = '';
     let wrongTimer      = null;
     let wrongStartTs    = 0;
-    let playerInitials  = '';       // captured from input at game start
+    let playerInitials  = '';
     let rafId           = null;
     let lastTs          = null;
-    let startBtn        = null;     // bounding rect of the Start button (set during render)
+    let startBtn        = null;
 
-    const WRONG_MS      = 3000;     // ms to show wrong-answer screen before END
+    const WRONG_MS = 3000;
 
-    // ── Analytics (localStorage) ───────────────────────────────────
+    // ── Analytics ─────────────────────────────────────────────────
 
     function saveScore(initials, score, total) {
       const scores = JSON.parse(localStorage.getItem('sq_scores') || '[]');
       scores.unshift({ initials, score, total, ts: new Date().toISOString() });
       localStorage.setItem('sq_scores', JSON.stringify(scores));
     }
-
     function getRecentScores(initials) {
       const all = JSON.parse(localStorage.getItem('sq_scores') || '[]');
       return all.filter(s => s.initials === initials).slice(0, 5);
     }
-
     function fmtDate(isoStr) {
       const d = new Date(isoStr);
       return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
            + ' ' + d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
     }
-
     function syncInputVisibility() {
       const wrap = document.getElementById('initials-wrap');
       if (state === 'START' && !devAnalytics) wrap.classList.remove('hidden');
-      else                                    wrap.classList.add('hidden');
+      else wrap.classList.add('hidden');
     }
 
     // ── Game flow ──────────────────────────────────────────────────
 
     function startGame() {
-      // To randomise question order each game, uncomment the next line:
-      // QUESTIONS = shuffleArray(QUESTIONS);
-      const raw      = document.getElementById('initials-input').value.trim().toUpperCase();
+      if (endTimer)   { clearTimeout(endTimer);   endTimer   = null; }
+      if (wrongTimer) { clearTimeout(wrongTimer); wrongTimer = null; }
+      const raw = document.getElementById('initials-input').value.trim().toUpperCase();
       playerInitials = raw || 'ANON';
-      score          = 0;
-      qIndex         = 0;
-      bullets        = [];
-      gunX           = W / 2;
-      keys           = {};
-      lastTs         = null;
-      state          = 'PLAYING';
+      score = 0; qIndex = 0; bullets = []; gunX = W / 2; keys = {}; lastTs = null;
+      state = 'PLAYING';
       syncInputVisibility();
       loadQuestion();
       if (rafId) cancelAnimationFrame(rafId);
       rafId = requestAnimationFrame(loop);
     }
 
-    function loadQuestion() {
-      qId++;
-      asteroids = buildAsteroids(QUESTIONS[qIndex]);
-      bullets   = [];
-    }
+    function loadQuestion() { qId++; asteroids = buildAsteroids(QUESTIONS[qIndex]); bullets = []; }
 
     function triggerEnd(title) {
-      state      = 'END';
-      endTitle   = title;
-      endStartTs = performance.now();
+      state = 'END'; endTitle = title; endStartTs = performance.now();
       saveScore(playerInitials, score, QUESTIONS.length);
       if (endTimer) clearTimeout(endTimer);
-      endTimer = setTimeout(() => { state = 'START'; syncInputVisibility(); render(); }, END_MS);
-      // loop() keeps running during END and will re-render each frame for the countdown
+      endTimer = setTimeout(() => { state = 'START'; syncInputVisibility(); }, END_MS);
     }
 
     function triggerWrong(chosenAnswer) {
-      state          = 'WRONG_ANSWER';
-      wrongQuestion  = QUESTIONS[qIndex];
-      wrongChosen    = chosenAnswer;
-      wrongStartTs   = performance.now();
-      asteroids      = [];
-      bullets        = [];
+      state = 'WRONG_ANSWER'; wrongQuestion = QUESTIONS[qIndex];
+      wrongChosen = chosenAnswer; wrongStartTs = performance.now();
+      asteroids = []; bullets = [];
       if (wrongTimer) clearTimeout(wrongTimer);
       wrongTimer = setTimeout(() => triggerEnd('Wrong answer! Game over.'), WRONG_MS);
     }
 
-    /** Spawn one bullet from the gun's apex */
-    function fireBullet() {
-      // gun apex y = H - GUN_H  (centre is H - GUN_H/2, apex is GUN_H/2 above that)
-      bullets.push({ x: gunX - BUL_W / 2, y: H - GUN_H - BUL_H, qId });
-    }
+    function fireBullet() { bullets.push({ x: gunX - BUL_W / 2, y: H - GUN_H - BUL_H, qId }); }
 
     // ── Update ─────────────────────────────────────────────────────
 
     function update(dt) {
-      // Move gun left / right, clamped to canvas edges
       if (keys.ArrowLeft)  gunX = Math.max(GUN_W / 2,     gunX - GUN_SPEED * dt);
       if (keys.ArrowRight) gunX = Math.min(W - GUN_W / 2, gunX + GUN_SPEED * dt);
-
-      // Advance bullets upward; cull any that have left the canvas
       for (const b of bullets) b.y -= BULLET_SPEED * dt;
       bullets = bullets.filter(b => b.y + BUL_H > 0);
-
-      // Drop asteroids
       for (const a of asteroids) a.y += ASTEROID_SPEED * dt;
 
-      // Collision: find the first bullet that strikes any asteroid
-      let hitBulletIdx = -1;
-      let hitAsteroid  = null;
+      let hitBulletIdx = -1, hitAsteroid = null;
       outer:
       for (let i = 0; i < bullets.length; i++) {
-        if (bullets[i].qId !== qId) continue;   // ignore bullets from a previous question
+        if (bullets[i].qId !== qId) continue;
         for (const a of asteroids) {
-          if (bulletHitsAsteroid(bullets[i], a)) {
-            hitBulletIdx = i;
-            hitAsteroid  = a;
-            break outer;
-          }
+          if (bulletHitsAsteroid(bullets[i], a)) { hitBulletIdx = i; hitAsteroid = a; break outer; }
         }
       }
 
       if (hitAsteroid !== null) {
-        bullets.splice(hitBulletIdx, 1);   // remove only the bullet that struck
+        bullets.splice(hitBulletIdx, 1);
         if (hitAsteroid.isCorrect) {
-          score++;
-          qIndex++;
+          score++; qIndex++;
           if (qIndex >= QUESTIONS.length) triggerEnd('You finished!');
           else loadQuestion();
-        } else {
-          triggerWrong(hitAsteroid.answer);
-        }
+        } else { triggerWrong(hitAsteroid.answer); }
         return;
       }
-
-      // Check whether any asteroid has reached the floor
       for (const a of asteroids) {
-        if (asteroidReachedBottom(a)) {
-          triggerEnd("Time's up! Game over.");
-          return;
-        }
+        if (asteroidReachedBottom(a)) { triggerEnd("Time's up! Game over."); return; }
       }
     }
 
     // ── Render ─────────────────────────────────────────────────────
 
     function render() {
-      ctx.fillStyle = '#000';
+      ctx.fillStyle = C.bg;
       ctx.fillRect(0, 0, W, H);
+      drawStars();
       if      (state === 'LOADING')      renderLoading();
       else if (state === 'ERROR')        renderError();
       else if (state === 'START')        renderStart();
@@ -383,24 +389,18 @@
 
     function renderLoading() {
       ctx.textAlign = 'center';
-      ctx.fillStyle = '#888';
-      ctx.font      = '20px monospace';
+      ctx.fillStyle = C.grey;
+      ctx.font      = `22px ${F.mono}`;
       ctx.fillText('Loading questions\u2026', W / 2, H / 2);
     }
 
-    /** Break a string into lines that fit within maxWidth at the current ctx.font */
     function wrapText(text, maxWidth) {
       const words = text.split(' ');
-      const lines = [];
-      let line    = '';
+      const lines = []; let line = '';
       for (const word of words) {
         const test = line ? line + ' ' + word : word;
-        if (ctx.measureText(test).width > maxWidth && line) {
-          lines.push(line);
-          line = word;
-        } else {
-          line = test;
-        }
+        if (ctx.measureText(test).width > maxWidth && line) { lines.push(line); line = word; }
+        else line = test;
       }
       if (line) lines.push(line);
       return lines;
@@ -408,19 +408,16 @@
 
     function renderError() {
       ctx.textAlign = 'center';
-      ctx.fillStyle = '#fff';
-      ctx.font      = 'bold 26px monospace';
+      ctx.fillStyle = C.white;
+      ctx.font      = `bold 28px ${F.mono}`;
       ctx.fillText('Failed to load questions', W / 2, 190);
-
-      // Wrap and render the specific error message
-      ctx.font      = '14px monospace';
-      ctx.fillStyle = '#f88';
+      ctx.font      = `16px ${F.mono}`;
+      ctx.fillStyle = C.red;
       const lines   = wrapText(errorMsg, W - 80);
       lines.forEach((line, i) => ctx.fillText(line, W / 2, 235 + i * 22));
-
       const afterMsg = 235 + lines.length * 22 + 20;
-      ctx.fillStyle = '#888';
-      ctx.font      = '13px monospace';
+      ctx.fillStyle = C.grey;
+      ctx.font      = `15px ${F.mono}`;
       ctx.fillText('Serve the folder with a local server, e.g.:', W / 2, afterMsg);
       ctx.fillText('python3 -m http.server 8000', W / 2, afterMsg + 22);
       ctx.fillText('then open http://localhost:8000/space-quiz.html', W / 2, afterMsg + 44);
@@ -429,257 +426,219 @@
     function renderStart() {
       ctx.textAlign = 'center';
 
-      ctx.fillStyle = '#fff';
-      ctx.font      = 'bold 52px monospace';
+      ctx.fillStyle = C.white;
+      ctx.font      = `bold 66px ${F.header}`;
       ctx.fillText('SPACE QUIZ', W / 2, 148);
 
-      ctx.font      = '17px monospace';
-      ctx.fillStyle = '#ccc';
+      ctx.font      = `19px ${F.mono}`;
+      ctx.fillStyle = C.grey;
       ctx.fillText('Shoot the asteroid with the correct answer', W / 2, 210);
       ctx.fillText('Arrow keys to move   \u00b7   Space to fire', W / 2, 238);
 
-      // Divider
-      ctx.strokeStyle = '#2a2a2a';
+      ctx.strokeStyle = C.panel;
       ctx.lineWidth   = 1;
       ctx.beginPath();
       ctx.moveTo(W / 2 - 180, 266); ctx.lineTo(W / 2 + 180, 266);
       ctx.stroke();
 
-      // Start button
       const bx = W / 2 - 90, by = 370, bw = 180, bh = 56;
-      ctx.strokeStyle = '#fff';
+      ctx.strokeStyle = C.blue;
       ctx.lineWidth   = 2;
       ctx.strokeRect(bx, by, bw, bh);
-      ctx.font      = 'bold 26px monospace';
-      ctx.fillStyle = '#fff';
-      ctx.fillText('START', W / 2, by + 38);
+      ctx.font      = `bold 38px ${F.header}`;
+      ctx.fillStyle = C.white;
+      ctx.fillText('START', W / 2, by + 40);
       startBtn = { x: bx, y: by, w: bw, h: bh };
+
+      ctx.font      = `12px ${F.mono}`;
+      ctx.fillStyle = '#252840';
+      ctx.textAlign = 'left';  ctx.fillText('A', 14, H - 12);
+      ctx.textAlign = 'right'; ctx.fillText('P', W - 14, H - 12);
+      ctx.textAlign = 'center';
     }
 
     function renderGame() {
       const q = QUESTIONS[qIndex];
 
-      // Score — top-left
-      ctx.fillStyle = '#fff';
-      ctx.font      = '16px monospace';
+      ctx.fillStyle = C.green;
+      ctx.font      = `18px ${F.mono}`;
       ctx.textAlign = 'left';
       ctx.fillText(`Score: ${score}`, 12, 22);
 
-      // Question — top-centre
-      ctx.font      = 'bold 20px monospace';
+      ctx.fillStyle = C.white;
+      ctx.font      = `bold 24px ${F.mono}`;
       ctx.textAlign = 'center';
       ctx.fillText(q.question, W / 2, 52);
 
-      // Thin separator below the question header
-      ctx.strokeStyle = '#333';
+      ctx.strokeStyle = C.panel;
       ctx.lineWidth   = 1;
-      ctx.beginPath();
-      ctx.moveTo(0, 66);
-      ctx.lineTo(W, 66);
-      ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(0, 66); ctx.lineTo(W, 66); ctx.stroke();
 
-      // Asteroids
       for (const a of asteroids) {
+        const ac = ASTEROID_COLORS[a.colorIdx];
         ctx.beginPath();
         ctx.arc(a.x, a.y, a.radius, 0, Math.PI * 2);
-        ctx.strokeStyle = '#fff';
+        ctx.fillStyle = ac.fill;
+        ctx.fill();
+        ctx.strokeStyle = ac.stroke;
         ctx.lineWidth   = 2;
         ctx.stroke();
         drawAsteroidText(ctx, a.answer, a.x, a.y, a.radius);
       }
 
-      // Bullets
-      ctx.fillStyle = '#fff';
+      ctx.fillStyle = C.green;
       for (const b of bullets) ctx.fillRect(b.x, b.y, BUL_W, BUL_H);
 
-      // Gun — upward-pointing white triangle
-      const gcy = H - GUN_H / 2;
-      ctx.beginPath();
-      ctx.moveTo(gunX,             gcy - GUN_H / 2);  // apex
-      ctx.lineTo(gunX - GUN_W / 2, gcy + GUN_H / 2);  // bottom-left
-      ctx.lineTo(gunX + GUN_W / 2, gcy + GUN_H / 2);  // bottom-right
-      ctx.closePath();
-      ctx.fillStyle = '#fff';
-      ctx.fill();
+      drawShip(gunX);
     }
 
     function renderWrongAnswer() {
       ctx.textAlign = 'center';
 
-      ctx.fillStyle = '#f44336';
-      ctx.font      = 'bold 42px monospace';
-      ctx.fillText('Wrong!', W / 2, 160);
+      ctx.fillStyle = C.red;
+      ctx.font      = `bold 68px ${F.header}`;
+      ctx.fillText('Wrong!', W / 2, 150);
 
-      ctx.fillStyle = '#ccc';
-      ctx.font      = 'bold 18px monospace';
-      ctx.fillText(wrongQuestion.question, W / 2, 240);
+      ctx.fillStyle = C.white;
+      ctx.font      = `bold 22px ${F.mono}`;
+      ctx.fillText(wrongQuestion.question, W / 2, 230);
 
-      ctx.font      = '15px monospace';
-      ctx.fillStyle = '#888';
+      ctx.font      = `19px ${F.mono}`;
+      ctx.fillStyle = C.grey;
       ctx.fillText('The correct answer was:', W / 2, 310);
 
-      ctx.fillStyle = '#4caf50';
-      ctx.font      = 'bold 28px monospace';
-      ctx.fillText(wrongQuestion.correct, W / 2, 358);
+      ctx.fillStyle = C.green;
+      ctx.font      = `bold 32px ${F.mono}`;
+      ctx.fillText(wrongQuestion.correct, W / 2, 370);
     }
 
     function renderEnd() {
       const secsLeft = Math.max(0, Math.ceil((END_MS - (performance.now() - endStartTs)) / 1000));
       ctx.textAlign  = 'center';
 
-      ctx.fillStyle  = '#fff';
-      ctx.font       = 'bold 38px monospace';
-      ctx.fillText(endTitle, W / 2, 120);
+      ctx.fillStyle  = C.white;
+      ctx.font       = `bold 56px ${F.header}`;
+      ctx.fillText(endTitle, W / 2, 110);
 
-      ctx.font       = '22px monospace';
-      ctx.fillText(`${score} / ${QUESTIONS.length}`, W / 2, 168);
+      ctx.font       = `26px ${F.mono}`;
+      ctx.fillText(`${score} / ${QUESTIONS.length}`, W / 2, 158);
 
-      ctx.font       = '14px monospace';
-      ctx.fillStyle  = '#888';
-      ctx.fillText(`Returning to start in ${secsLeft} second${secsLeft === 1 ? '' : 's'}\u2026`, W / 2, 208);
+      ctx.font       = `18px ${F.mono}`;
+      ctx.fillStyle  = C.grey;
+      ctx.fillText(`Returning to start in ${secsLeft} second${secsLeft === 1 ? '' : 's'}\u2026`, W / 2, 200);
 
-      // Recent scores for this player
       const recent = getRecentScores(playerInitials);
       if (recent.length > 0) {
-        ctx.fillStyle = '#555';
-        ctx.font      = '13px monospace';
-        ctx.fillText(`\u2500\u2500 ${playerInitials} \u2014 recent scores \u2500\u2500`, W / 2, 258);
+        ctx.fillStyle = C.blue;
+        ctx.font      = `17px ${F.mono}`;
+        ctx.fillText(`\u2500\u2500 ${playerInitials} \u2014 recent scores \u2500\u2500`, W / 2, 248);
+
+        const COL_SCORE = 180, COL_DATE = 620, ROW_START = 290, ROW_GAP = 34;
 
         recent.forEach((s, i) => {
-          ctx.fillStyle = i === 0 ? '#ccc' : '#666';
-          ctx.font      = i === 0 ? 'bold 14px monospace' : '13px monospace';
-          ctx.fillText(`${fmtDate(s.ts)}   ${s.score} / ${s.total}`, W / 2, 286 + i * 26);
+          const y = ROW_START + i * ROW_GAP;
+          const isCurrent = i === 0;
+
+          ctx.font      = isCurrent ? `bold 18px ${F.mono}` : `17px ${F.mono}`;
+          ctx.fillStyle = isCurrent ? C.green : C.grey;
+          ctx.textAlign = 'left';
+          ctx.fillText(`${s.score} / ${s.total}`, COL_SCORE, y);
+
+          ctx.font      = isCurrent ? `bold 18px ${F.mono}` : `17px ${F.mono}`;
+          ctx.fillStyle = isCurrent ? C.white : '#4a5a70';
+          ctx.textAlign = 'right';
+          ctx.fillText(fmtDate(s.ts), COL_DATE, y);
         });
+
+        ctx.textAlign = 'center';
       }
     }
 
     // ── Game loop ──────────────────────────────────────────────────
 
-    let devPaused    = false;  // dev-only: P key
-    let devAnalytics = false;  // dev-only: A key
+    let devPaused    = false;
+    let devAnalytics = false;
 
-    // ── Dev analytics ──────────────────────────────────────────────
-
-    /**
-     * OLS linear regression slope.
-     * Returns change in percentage points per game session.
-     * Grounded in curriculum-based measurement research (Ordinary Least Squares
-     * is the standard method for student progress trend lines).
-     * Requires ≥ 3 data points for a meaningful result.
-     */
     function oLsSlope(values) {
-      const n     = values.length;
-      const xMean = (n - 1) / 2;
+      const n = values.length, xMean = (n - 1) / 2;
       const yMean = values.reduce((a, b) => a + b, 0) / n;
       let num = 0, den = 0;
-      for (let i = 0; i < n; i++) {
-        num += (i - xMean) * (values[i] - yMean);
-        den += (i - xMean) * (i - xMean);
-      }
+      for (let i = 0; i < n; i++) { num += (i - xMean) * (values[i] - yMean); den += (i - xMean) ** 2; }
       return den === 0 ? 0 : num / den;
     }
 
     function trendLabel(slope, gameCount) {
-      if (gameCount < 3) return { text: '— need 3+ games', color: '#3a3a3a' };
-      if (slope >  5)   return { text: '\u2191 Improving',  color: '#4caf50' };
-      if (slope < -5)   return { text: '\u2193 Declining',  color: '#f44336' };
-      return               { text: '\u2192 Stable',         color: '#888'    };
+      if (gameCount < 3) return { text: '— need 3+ games', color: '#3a4060' };
+      if (slope >  5)   return { text: '\u2191 Improving',  color: C.green };
+      if (slope < -5)   return { text: '\u2193 Declining',  color: C.red   };
+      return               { text: '\u2192 Stable',         color: C.grey  };
     }
 
     function getAnalyticsData() {
-      const all     = JSON.parse(localStorage.getItem('sq_scores') || '[]');
+      const all = JSON.parse(localStorage.getItem('sq_scores') || '[]');
       const players = {};
-      for (const e of all) {
-        if (!players[e.initials]) players[e.initials] = [];
-        players[e.initials].push(e);  // already newest-first
-      }
+      for (const e of all) { if (!players[e.initials]) players[e.initials] = []; players[e.initials].push(e); }
       return Object.entries(players)
         .map(([initials, entries]) => {
-          // oldest-first percentages for OLS
-          const pcts  = entries.slice().reverse().map(e => e.score / e.total * 100);
-          const slope = oLsSlope(pcts);
-          return { initials, entries, slope };
+          const pcts = entries.slice().reverse().map(e => e.score / e.total * 100);
+          return { initials, entries, slope: oLsSlope(pcts) };
         })
         .sort((a, b) => new Date(b.entries[0].ts) - new Date(a.entries[0].ts));
     }
 
     function renderAnalytics() {
-      // Full-canvas dark overlay
-      ctx.fillStyle = 'rgba(0,0,0,0.94)';
+      ctx.fillStyle = C.navy;
       ctx.fillRect(0, 0, W, H);
 
       ctx.textAlign = 'left';
+      ctx.fillStyle = C.white;
+      ctx.font      = `bold 22px ${F.mono}`;
+      ctx.fillText('DEV ANALYTICS', 24, 40);
 
-      // Title bar
-      ctx.fillStyle = '#fff';
-      ctx.font      = 'bold 16px monospace';
-      ctx.fillText('DEV ANALYTICS', 24, 36);
-      ctx.font      = '12px monospace';
-      ctx.fillStyle = '#444';
+      ctx.font      = `16px ${F.mono}`;
+      ctx.fillStyle = C.grey;
       ctx.textAlign = 'right';
-      ctx.fillText('A \u2192 close   \u00b7   P \u2192 pause/unpause', W - 24, 36);
+      ctx.fillText('A \u2192 close   \u00b7   P \u2192 pause/unpause', W - 24, 40);
 
-      // Column headers
-      const ROW_H = 22, TABLE_TOP = 66;
-      const COL   = { player: 24, date: 110, score: 330, pct: 410, trend: 480 };
+      const ROW_H = 28, TABLE_TOP = 76;
+      const COL = { player: 24, date: 120, score: 360, pct: 460, trend: 540 };
 
       ctx.textAlign = 'left';
-      ctx.font      = 'bold 12px monospace';
-      ctx.fillStyle = '#555';
-      ctx.fillText('PLAYER', COL.player, TABLE_TOP);
-      ctx.fillText('DATE',   COL.date,   TABLE_TOP);
-      ctx.fillText('SCORE',  COL.score,  TABLE_TOP);
-      ctx.fillText('%',      COL.pct,    TABLE_TOP);
-      ctx.fillText('TREND',  COL.trend,  TABLE_TOP);
+      ctx.font      = `bold 16px ${F.mono}`;
+      ctx.fillStyle = C.blue;
+      for (const [label, x] of [['PLAYER', COL.player],['DATE', COL.date],['SCORE', COL.score],['%', COL.pct],['TREND', COL.trend]])
+        ctx.fillText(label, x, TABLE_TOP);
 
-      // Separator
-      ctx.strokeStyle = '#222';
-      ctx.lineWidth   = 1;
-      ctx.beginPath();
-      ctx.moveTo(24, TABLE_TOP + 8); ctx.lineTo(W - 24, TABLE_TOP + 8);
-      ctx.stroke();
+      ctx.strokeStyle = C.panel; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(24, TABLE_TOP + 10); ctx.lineTo(W - 24, TABLE_TOP + 10); ctx.stroke();
 
-      const data  = getAnalyticsData();
-      let   rowY  = TABLE_TOP + 8 + ROW_H;
-      const maxY  = H - 24;
+      const data = getAnalyticsData();
+      let rowY = TABLE_TOP + 10 + ROW_H, maxY = H - 24;
 
       for (const player of data) {
         const trend = trendLabel(player.slope, player.entries.length);
         for (let i = 0; i < player.entries.length; i++) {
           if (rowY > maxY) break;
-          const e    = player.entries[i];
-          const pct  = Math.round(e.score / e.total * 100);
+          const e = player.entries[i], pct = Math.round(e.score / e.total * 100);
           const isFirst = i === 0;
-
-          ctx.font      = isFirst ? 'bold 13px monospace' : '13px monospace';
-          ctx.fillStyle = isFirst ? '#ddd' : '#555';
+          ctx.font      = isFirst ? `bold 17px ${F.mono}` : `17px ${F.mono}`;
+          ctx.fillStyle = isFirst ? C.white : '#4a5070';
           ctx.textAlign = 'left';
-
-          ctx.fillText(isFirst ? player.initials : '',       COL.player, rowY);
-          ctx.fillText(fmtDate(e.ts),                        COL.date,   rowY);
-          ctx.fillText(`${e.score}/${e.total}`,              COL.score,  rowY);
-          ctx.fillText(`${pct}%`,                            COL.pct,    rowY);
-
-          if (isFirst) {
-            ctx.fillStyle = trend.color;
-            ctx.font      = 'bold 13px monospace';
-            ctx.fillText(trend.text, COL.trend, rowY);
-          }
+          ctx.fillText(isFirst ? player.initials : '', COL.player, rowY);
+          ctx.fillText(fmtDate(e.ts),                  COL.date,   rowY);
+          ctx.fillText(`${e.score}/${e.total}`,         COL.score,  rowY);
+          ctx.fillText(`${pct}%`,                       COL.pct,    rowY);
+          if (isFirst) { ctx.fillStyle = trend.color; ctx.font = `bold 17px ${F.mono}`; ctx.fillText(trend.text, COL.trend, rowY); }
           rowY += ROW_H;
         }
-        // Player separator
         if (rowY <= maxY) {
-          ctx.strokeStyle = '#1a1a1a';
-          ctx.beginPath();
-          ctx.moveTo(24, rowY - ROW_H / 2); ctx.lineTo(W - 24, rowY - ROW_H / 2);
-          ctx.stroke();
+          ctx.strokeStyle = C.navy;
+          ctx.beginPath(); ctx.moveTo(24, rowY - ROW_H / 2); ctx.lineTo(W - 24, rowY - ROW_H / 2); ctx.stroke();
         }
       }
 
       if (data.length === 0) {
-        ctx.textAlign = 'center';
-        ctx.fillStyle = '#333';
-        ctx.font      = '14px monospace';
+        ctx.textAlign = 'center'; ctx.fillStyle = '#3a4060'; ctx.font = `18px ${F.mono}`;
         ctx.fillText('No scores recorded yet. Play a game first.', W / 2, H / 2);
       }
     }
@@ -694,32 +653,22 @@
         }
         render();
       }
-      if (state === 'PLAYING' || state === 'WRONG_ANSWER' || state === 'END') {
-        rafId = requestAnimationFrame(loop);
-      }
+      rafId = requestAnimationFrame(loop);
     }
 
     // ── Input ──────────────────────────────────────────────────────
 
     document.addEventListener('keydown', e => {
-      // Dev-only: P freezes/unfreezes · A opens/closes analytics
       if (e.code === 'KeyP') { devPaused = !devPaused; lastTs = null; return; }
       if (e.code === 'KeyA' && document.activeElement !== document.getElementById('initials-input')) {
-        devAnalytics = !devAnalytics;
-        syncInputVisibility();
-        render();
-        return;
+        devAnalytics = !devAnalytics; syncInputVisibility(); render(); return;
       }
-
-      if (!['ArrowLeft', 'ArrowRight', 'Space'].includes(e.code)) return;
-      e.preventDefault();                        // prevent page scrolling
+      if (!['ArrowLeft','ArrowRight','Space'].includes(e.code)) return;
+      e.preventDefault();
       if (state !== 'PLAYING') return;
       if (e.code === 'ArrowLeft')  keys.ArrowLeft  = true;
       if (e.code === 'ArrowRight') keys.ArrowRight = true;
-      if (e.code === 'Space' && !keys._spaceHeld) {
-        keys._spaceHeld = true;
-        fireBullet();
-      }
+      if (e.code === 'Space' && !keys._spaceHeld) { keys._spaceHeld = true; fireBullet(); }
     });
 
     document.addEventListener('keyup', e => {
@@ -733,11 +682,9 @@
       const r  = canvas.getBoundingClientRect();
       const mx = (e.clientX - r.left) * (W / r.width);
       const my = (e.clientY - r.top)  * (H / r.height);
-      const b  = startBtn;
-      if (mx >= b.x && mx <= b.x + b.w && my >= b.y && my <= b.y + b.h) startGame();
+      if (mx >= startBtn.x && mx <= startBtn.x + startBtn.w && my >= startBtn.y && my <= startBtn.y + startBtn.h) startGame();
     });
 
-    // ── Boot ───────────────────────────────────────────────────────
     boot();
   </script>
 </body>
