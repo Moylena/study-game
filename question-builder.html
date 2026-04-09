@@ -327,7 +327,7 @@
     <h2 class="section-title">Upload Files</h2>
     <div id="alert-upload"></div>
     <div class="drop-zone" id="drop-zone" onclick="document.getElementById('file-input').click()">
-      <input type="file" id="file-input" multiple accept=".docx,.java,.jpg,.jpeg,.png"
+      <input type="file" id="file-input" multiple accept=".docx,.java,.jpg,.jpeg,.png,.txt,.pdf"
              onchange="FileIngestor.onFileSelect(event)">
       <h2>Drop files here or click to browse</h2>
       <p>Accepts: .docx &nbsp;·&nbsp; .java &nbsp;·&nbsp; .jpg / .jpeg / .png</p>
@@ -467,6 +467,7 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/mammoth@1.6.0/mammoth.browser.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
 <script>
 'use strict';
 
@@ -680,7 +681,7 @@ const VersionHistory = {
 // FileIngestor
 // ─────────────────────────────────────────────────────────────────────────────
 const FileIngestor = {
-  ALLOWED_EXT: ['docx', 'java', 'jpg', 'jpeg', 'png'],
+  ALLOWED_EXT: ['docx', 'java', 'jpg', 'jpeg', 'png', 'txt', 'pdf'],
 
   init() {
     const zone = document.getElementById('drop-zone');
@@ -703,7 +704,7 @@ const FileIngestor = {
     for (const file of files) {
       const ext = file.name.split('.').pop().toLowerCase();
       if (!this.ALLOWED_EXT.includes(ext)) {
-        showAlert('alert-upload', 'error', `Skipped "${file.name}" — unsupported type. Accepted: .docx, .java, .jpg, .jpeg, .png`);
+        showAlert('alert-upload', 'error', `Skipped "${file.name}" — unsupported type. Accepted: .docx, .txt, .pdf, .java, .jpg, .jpeg, .png`);
         continue;
       }
       if (state.files.find(f => f.name === file.name)) continue; // skip duplicates
@@ -736,8 +737,24 @@ const FileIngestor = {
         };
         reader.onerror = reject;
         reader.readAsArrayBuffer(file);
+      } else if (ext === 'pdf') {
+        reader.onload = async e => {
+          try {
+            pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
+            const pdf = await pdfjsLib.getDocument({ data: e.target.result }).promise;
+            const pages = [];
+            for (let i = 1; i <= pdf.numPages; i++) {
+              const page = await pdf.getPage(i);
+              const textContent = await page.getTextContent();
+              pages.push(textContent.items.map(item => item.str).join(' '));
+            }
+            resolve({ name: file.name, kind: 'text', content: pages.join('\n\n') });
+          } catch (err) { reject(err); }
+        };
+        reader.onerror = reject;
+        reader.readAsArrayBuffer(file);
       } else {
-        // .java — plain text
+        // .java, .txt — plain text
         reader.onload  = e => resolve({ name: file.name, kind: 'text', content: e.target.result });
         reader.onerror = reject;
         reader.readAsText(file);
