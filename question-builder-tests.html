@@ -184,6 +184,60 @@
         'end before start → throws');
     })();
 
+    // ── FileIngestor ─────────────────────────────────────────────────
+    // Replicated from question-builder.html — must stay in sync.
+
+    const FileIngestor = {
+      ALLOWED_EXT: ['docx', 'java', 'jpg', 'jpeg', 'png', 'txt', 'pdf'],
+
+      getExt(filename) {
+        return filename.split('.').pop().toLowerCase();
+      },
+
+      getKind(ext) {
+        if (['jpg', 'jpeg', 'png'].includes(ext)) return 'image';
+        return 'text';
+      }
+    };
+
+    section('FileIngestor — allowed extensions');
+
+    (() => {
+      const exts = FileIngestor.ALLOWED_EXT;
+      assert(exts.includes('txt'),  '.txt is in ALLOWED_EXT');
+      assert(exts.includes('pdf'),  '.pdf is in ALLOWED_EXT');
+      assert(exts.includes('docx'), '.docx is in ALLOWED_EXT');
+      assert(exts.includes('java'), '.java is in ALLOWED_EXT');
+      assert(exts.includes('jpg'),  '.jpg is in ALLOWED_EXT');
+      assert(exts.includes('jpeg'), '.jpeg is in ALLOWED_EXT');
+      assert(exts.includes('png'),  '.png is in ALLOWED_EXT');
+      assert(!exts.includes('exe'), '.exe is NOT in ALLOWED_EXT');
+      assert(!exts.includes('zip'), '.zip is NOT in ALLOWED_EXT');
+      assert(!exts.includes('csv'), '.csv is NOT in ALLOWED_EXT');
+    })();
+
+    section('FileIngestor — extension parsing');
+
+    (() => {
+      assert(FileIngestor.getExt('notes.txt')       === 'txt',  'notes.txt → txt');
+      assert(FileIngestor.getExt('lecture.PDF')      === 'pdf',  'lecture.PDF → pdf (lowercased)');
+      assert(FileIngestor.getExt('study notes.docx') === 'docx', 'filename with space → docx');
+      assert(FileIngestor.getExt('photo.JPEG')       === 'jpeg', 'photo.JPEG → jpeg (lowercased)');
+      assert(FileIngestor.getExt('archive.tar.gz')   === 'gz',   'double extension → last segment only');
+    })();
+
+    section('FileIngestor — kind routing');
+
+    (() => {
+      assert(FileIngestor.getKind('txt')  === 'text',  '.txt → kind: text');
+      assert(FileIngestor.getKind('pdf')  === 'text',  '.pdf → kind: text');
+      assert(FileIngestor.getKind('docx') === 'text',  '.docx → kind: text');
+      assert(FileIngestor.getKind('java') === 'text',  '.java → kind: text');
+      assert(FileIngestor.getKind('jpg')  === 'image', '.jpg → kind: image');
+      assert(FileIngestor.getKind('jpeg') === 'image', '.jpeg → kind: image');
+      assert(FileIngestor.getKind('png')  === 'image', '.png → kind: image');
+    })();
+
     // ── DeployManager.validate ───────────────────────────────────────
 
     section('DeployManager.validate');
