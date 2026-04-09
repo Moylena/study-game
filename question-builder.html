@@ -14,6 +14,30 @@
       min-height: 100vh;
     }
 
+    /* ── Confirmation overlay ── */
+    .overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.7);
+      z-index: 200;
+      align-items: center;
+      justify-content: center;
+    }
+    .overlay.active { display: flex; }
+    .overlay-box {
+      background: #111128;
+      border: 1px solid #2a2a4a;
+      border-radius: 12px;
+      padding: 32px;
+      max-width: 380px;
+      width: 90%;
+      text-align: center;
+    }
+    .overlay-box h3 { font-size: 17px; color: #c0c0e0; margin-bottom: 10px; }
+    .overlay-box p  { font-size: 14px; color: #7070a0; margin-bottom: 24px; }
+    .overlay-actions { display: flex; gap: 10px; justify-content: center; }
+
     /* ── Top bar ── */
     .topbar {
       position: fixed;
@@ -763,12 +787,17 @@ const FileIngestor = {
   },
 
   render() {
-    document.getElementById('file-list').innerHTML = state.files.map((f, i) => `
+    document.getElementById('file-list').innerHTML = state.files.map((f, i) => {
+      const detail = f.kind === 'text'
+        ? `${escapeHTML(f.kind)} · ${f.content.trim().length.toLocaleString()} chars`
+        : escapeHTML(f.kind);
+      return `
       <div class="file-item">
         <span class="file-name">${escapeHTML(f.name)}</span>
-        <span class="file-kind">${escapeHTML(f.kind)}</span>
+        <span class="file-kind">${detail}</span>
         <button class="file-remove" onclick="FileIngestor.remove(${i})" title="Remove file">✕</button>
-      </div>`).join('');
+      </div>`;
+    }).join('');
     document.getElementById('btn-generate').disabled = state.files.length === 0;
   },
 
@@ -936,8 +965,16 @@ const ReviewUI = {
     state.lastRejected = i;
     this._updateCount();
   },
-  approveAll()     { state.questions.forEach((_, i) => this.approve(i)); },
-  rejectAll()      { state.questions.forEach((_, i) => this.reject(i)); },
+  approveAll()  { state.questions.forEach((_, i) => this.approve(i)); },
+  rejectAll()   { document.getElementById('overlay-reject-all').classList.add('active'); },
+  confirmRejectAll() {
+    document.getElementById('overlay-reject-all').classList.remove('active');
+    state.questions  = [];
+    state.files      = [];
+    FileIngestor.render();
+    App.goTo('upload');
+  },
+  cancelRejectAll() { document.getElementById('overlay-reject-all').classList.remove('active'); },
   undoLastReject() {
     if (state.lastRejected !== null) { this.approve(state.lastRejected); state.lastRejected = null; }
   },
@@ -1058,5 +1095,16 @@ const App = {
 // ─────────────────────────────────────────────────────────────────────────────
 FileIngestor.init();
 </script>
+
+<div id="overlay-reject-all" class="overlay">
+  <div class="overlay-box">
+    <h3>Reject all questions?</h3>
+    <p>This will discard all generated questions and return you to the upload screen.</p>
+    <div class="overlay-actions">
+      <button class="btn btn-danger" onclick="ReviewUI.confirmRejectAll()">Yes, start over</button>
+      <button class="btn btn-ghost"  onclick="ReviewUI.cancelRejectAll()">Cancel</button>
+    </div>
+  </div>
+</div>
 </body>
 </html>
